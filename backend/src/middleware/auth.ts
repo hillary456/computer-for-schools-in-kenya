@@ -1,42 +1,42 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthRequest, UserType } from '../types.js';
-import supabase from '../db/supabase.js';
- 
-export const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(' ')[1];
+import jwt from 'jsonwebtoken';
+import { JWTPayload, UserRoleType } from '../types/index.js';
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is not defined');
+}
+
+export const authenticateToken = (req: Request, res: Response, next: NextFunction): void => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ message: 'Access denied. No token provided.' });
+    res.status(401).json({ message: 'Access token required' });
+    return;
   }
- 
-  const { data, error } = await supabase.auth.getUser(token);
 
-  if (error || !data?.user) { 
-    return res.status(401).json({ message: 'Access denied. Invalid token.', details: error?.message });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as unknown as JWTPayload;
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(403).json({ message: 'Invalid or expired token' });
   }
- 
-  const { data: userData, error: userError } = await supabase
-    .from('users')
-    .select('user_type, email')
-    .eq('id', data.user.id)
-    .single();
-    
-  if (userError || !userData) {
-      return res.status(401).json({ message: 'Access denied. User profile not found.' });
-  }
- 
-  req.user = {
-    id: data.user.id,
-    email: userData.email,
-    user_type: userData.user_type as UserType,
+};
+
+export const authorizeRoles = (...roles: UserRoleType[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    if (!roles.includes(req.user.user_type)) {
+      res.status(403).json({ message: 'Insufficient permissions' });
+      return;
+    }
+
+    next();
   };
-
-  next();
-}; 
-
-export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => { 
-  if (!req.user || req.user.user_type !== 'admin') { 
-    return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
-  }
-  next();
 };
