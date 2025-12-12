@@ -182,7 +182,10 @@ async function handleDonationSubmit(e) {
         const result = await response.json();
         if (response.ok) {
             e.target.reset();
-            showNotification('Thank you for your generous donation!', 'success');
+            showNotification('Thank you for your generous donation!', 'success'); 
+            if (currentUser && currentUser.type === 'donor') {
+                loadUserDashboardData();
+            }
         } else {
             showNotification(result.message || 'Submission failed', 'error');
         }
@@ -419,14 +422,39 @@ function openDashboard() {
     const modal = document.getElementById('dashboardModal');
     modal.style.display = 'block';
     document.body.style.overflow = 'hidden';
-    if (currentUser) {
+    
+    if (currentUser) { 
         const userNameEl = document.getElementById('dashboardUserName');
         const userTypeEl = document.getElementById('dashboardUserType');
         if(userNameEl) userNameEl.textContent = currentUser.name;
         if(userTypeEl) userTypeEl.textContent = currentUser.type;
         updateSettingsForm();
+ 
+        const views = ['donorDashboard', 'schoolDashboard', 'adminDashboard'];
+        views.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+ 
+        if (currentUser.type === 'school') {
+            const schoolDash = document.getElementById('schoolDashboard');
+            if (schoolDash) schoolDash.style.display = 'block';
+            showDashboardSection('schoolOverview');
+            loadSchoolDashboardData();
+        } 
+        else if (currentUser.type === 'admin') {
+            const adminDash = document.getElementById('adminDashboard');
+            if (adminDash) adminDash.style.display = 'block';
+            showDashboardSection('adminOverview');
+            loadAdminDashboardData();
+        } 
+        else { 
+            const donorDash = document.getElementById('donorDashboard');
+            if (donorDash) donorDash.style.display = 'block';
+            showDashboardSection('overview');
+            loadUserDashboardData();
+        }
     }
-    showDashboardSection('overview');
 }
 
 function closeDashboard() {
@@ -441,13 +469,18 @@ function showDashboardSection(sectionName) {
     if(targetSection) targetSection.classList.add('active');
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
-        if(item.textContent.toLowerCase().trim() === sectionName) item.classList.add('active');
+        if(item.textContent.toLowerCase().trim() === sectionName.toLowerCase()) item.classList.add('active');
     });
 }
 
 function handleDashboardNavClick(e) {
-    const sectionName = e.target.textContent.toLowerCase().trim();
-    showDashboardSection(sectionName);
+    const sectionName = e.target.textContent.toLowerCase().trim(); 
+    let targetSection = sectionName;
+    if (sectionName === 'overview') {
+        if (currentUser.type === 'school') targetSection = 'schoolOverview';
+        else if (currentUser.type === 'admin') targetSection = 'adminOverview';
+    }
+    showDashboardSection(targetSection);
 }
 
 function updateSettingsForm() {
@@ -495,3 +528,196 @@ window.addEventListener('scroll', () => {
 const style = document.createElement('style');
 style.textContent = `@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .notification-content { display: flex; align-items: center; gap: 12px; } .notification-close { background: none; border: none; color: inherit; cursor: pointer; padding: 4px; border-radius: 4px; transition: background-color 0.2s; } .notification-close:hover { background-color: rgba(255, 255, 255, 0.2); } .error { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important; } .hamburger.active span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); } .hamburger.active span:nth-child(2) { opacity: 0; } .hamburger.active span:nth-child(3) { transform: rotate(-45deg) translate(7px, -6px); }`;
 document.head.appendChild(style);
+ 
+
+async function loadUserDashboardData() {
+    if (!currentUser || !currentUser.user_id) return;
+
+    try { 
+        const response = await fetch(`${API_URL}/donations/user/${currentUser.user_id}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const data = await response.json(); 
+            const donations = data.donations || [];
+             
+            updateDashboardStats(donations);
+            renderDonationsTable(donations);
+            renderRecentActivity(donations);
+        } else {
+            console.error('Failed to fetch user donations');
+        }
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+    }
+}
+
+function updateDashboardStats(donations) { 
+    const totalDonationsEl = document.getElementById('dashTotalDonations');
+    if (totalDonationsEl) {
+        totalDonationsEl.textContent = donations.length;
+    }
+}
+
+function renderDonationsTable(donations) {
+    const tbody = document.getElementById('donationTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';  
+
+    if (donations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 1rem;">No donations found yet.</td></tr>';
+        return;
+    }
+
+    donations.forEach(donation => {
+        const date = new Date(donation.created_at).toLocaleDateString();
+        const statusClass = getStatusClass(donation.status);
+        const statusLabel = donation.status.charAt(0).toUpperCase() + donation.status.slice(1);
+
+        const row = `
+            <tr>
+                <td>${date}</td>
+                <td style="text-transform: capitalize;">${donation.computer_type}</td>
+                <td>${donation.quantity}</td>
+                <td><span class="status ${statusClass}">${statusLabel}</span></td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+}
+
+function renderRecentActivity(donations) {
+    const activityList = document.getElementById('dashActivityList');
+    if (!activityList) return;
+
+    activityList.innerHTML = '';  
+    const recentItems = donations.slice(0, 3);
+
+    if (recentItems.length === 0) {
+        activityList.innerHTML = '<p style="color: #6b7280; font-size: 0.9rem;">No recent activity.</p>';
+        return;
+    }
+
+    recentItems.forEach(donation => {
+        const date = new Date(donation.created_at).toLocaleDateString();
+        
+        let description = '';
+        let icon = 'fa-clock';
+        let iconColor = '#fef3c7'; 
+        let iconTextColor = '#92400e';
+
+        if (donation.status === 'pending') {
+            description = `Submission for ${donation.quantity} ${donation.computer_type}(s) is pending approval.`;
+        } else if (donation.status === 'approved') {
+            icon = 'fa-check';
+            iconColor = '#dcfce7'; 
+            iconTextColor = '#166534';
+            description = `Donation of ${donation.quantity} ${donation.computer_type}(s) has been approved.`;
+        } else if (donation.status === 'delivered') {
+            icon = 'fa-truck';
+            iconColor = '#dbeafe'; 
+            iconTextColor = '#1e40af';
+            description = `Donation delivered successfully!`;
+        } else {
+             description = `Status update: ${donation.status}`;
+        }
+
+        const item = `
+            <div class="activity-item">
+                <div class="activity-icon" style="background: ${iconColor};">
+                    <i class="fas ${icon}" style="color: ${iconTextColor};"></i>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">Donation ${donation.status}</div>
+                    <div class="activity-description">${description}</div>
+                    <div class="activity-date">${date}</div>
+                </div>
+            </div>
+        `;
+        activityList.innerHTML += item;
+    });
+}
+ 
+
+async function loadSchoolDashboardData() {
+    if (!currentUser || !currentUser.user_id) return;
+
+    try {
+        const response = await fetch(`${API_URL}/schools/requests/user/${currentUser.user_id}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            renderSchoolRequests(data.requests || []);
+        } else {
+            console.error('Failed to fetch school requests');
+        }
+    } catch (error) {
+        console.error('Error loading school data:', error);
+    }
+}
+
+function renderSchoolRequests(requests) {
+    const tbody = document.getElementById('schoolRequestsBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (requests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 1rem;">No requests made yet.</td></tr>';
+        return;
+    }
+
+    requests.forEach(req => {
+        const date = new Date(req.created_at).toLocaleDateString();
+        const statusClass = getStatusClass(req.status);
+        const statusLabel = req.status.charAt(0).toUpperCase() + req.status.slice(1);
+        
+        const row = `
+            <tr>
+                <td>${date}</td>
+                <td style="text-transform: capitalize;">${req.computer_type}</td>
+                <td>${req.quantity}</td>
+                <td><span class="status ${statusClass}">${statusLabel}</span></td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+}  
+
+async function loadAdminDashboardData() {
+    try {
+        const response = await fetch(`${API_URL}/stats/dashboard`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const data = await response.json(); 
+            const pendingDonationsEl = document.getElementById('adminPendingDonations');
+            const pendingRequestsEl = document.getElementById('adminPendingRequests');
+            
+            if (pendingDonationsEl) pendingDonationsEl.textContent = data.statistics.pending.donations || 0;
+            if (pendingRequestsEl) pendingRequestsEl.textContent = data.statistics.pending.requests || 0;
+        } else {
+            console.error('Failed to fetch admin stats');
+        }
+    } catch (error) {
+        console.error('Error loading admin stats:', error);
+    }
+}
+ 
+
+function getStatusClass(status) {
+    switch (status) {
+        case 'delivered': return 'delivered'; 
+        case 'approved': return 'delivered';  
+        case 'fulfilled': return 'delivered';
+        case 'pending': return 'processing';  
+        case 'processing': return 'processing';
+        case 'rejected': return 'error';      
+        default: return '';
+    }
+} 

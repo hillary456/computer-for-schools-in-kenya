@@ -8,7 +8,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <!-- Header -->
     <header class="header">
         <nav class="navbar">
             <div class="nav-container">
@@ -42,7 +41,6 @@
         </nav>
     </header>
 
-    <!-- Hero Section -->
     <section id="home" class="hero">
         <div class="hero-container">
             <div class="hero-content">
@@ -72,7 +70,6 @@
         </div>
     </section>
 
-    <!-- About Section -->
     <section id="about" class="about">
         <div class="container">
             <div class="section-header">
@@ -138,7 +135,6 @@
         </div>
     </section>
 
-    <!-- Services Section -->
     <section id="services" class="services">
         <div class="container">
             <div class="section-header">
@@ -182,7 +178,6 @@
         </div>
     </section>
 
-    <!-- Donation Form Section -->
     <section id="donate" class="donate">
         <div class="container">
             <div class="section-header">
@@ -286,7 +281,6 @@
         </div>
     </section>
 
-    <!-- Impact Section -->
     <section class="impact">
         <div class="container">
             <div class="section-header">
@@ -355,7 +349,6 @@
         </div>
     </section>
 
-    <!-- Schools Section -->
     <section id="schools" class="schools">
         <div class="container">
             <div class="section-header">
@@ -519,7 +512,6 @@
         </div>
     </section>
 
-    <!-- Contact Section -->
     <section id="contact" class="contact">
         <div class="container">
             <div class="section-header">
@@ -593,7 +585,6 @@
         </div>
     </section>
 
-    <!-- Footer -->
     <footer class="footer">
         <div class="container">
             <div class="footer-content">
@@ -657,7 +648,6 @@
         </div>
     </footer>
 
-    <!-- Auth Modal -->
     <div id="authModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -738,7 +728,6 @@
         </div>
     </div>
 
-    <!-- Dashboard Modal -->
     <div id="dashboardModal" class="modal">
         <div class="modal-content dashboard-modal">
             <div class="dashboard-header">
@@ -777,105 +766,111 @@
                 </div>
                 
                 <div class="dashboard-main">
-                    <div id="overviewSection" class="dashboard-section active">
-                        <h3>Dashboard Overview</h3>
-                        <div class="dashboard-stats">
-                            <div class="stat-card">
-                                <div class="stat-icon">
-                                    <i class="fas fa-desktop"></i>
+                    
+                    <div id="donorDashboard">
+                        <div id="overviewSection" class="dashboard-section active">
+                            <h3>Dashboard Overview</h3>
+                            <div class="dashboard-stats">
+                                <div class="stat-card">
+                                    <div class="stat-icon">
+                                        <i class="fas fa-desktop"></i>
+                                    </div>
+                                    <div class="stat-info">
+                                        <div class="stat-number" id="dashTotalDonations">0</div>
+                                        <div class="stat-label">My Donations</div>
+                                    </div>
                                 </div>
-                                <div class="stat-info">
-                                    <div class="stat-number">16</div>
-                                    <div class="stat-label">Total Donations</div>
+                                <div class="stat-card">
+                                    <div class="stat-icon">
+                                        <i class="fas fa-graduation-cap"></i>
+                                    </div>
+                                    <div class="stat-info">
+                                        <div class="stat-number">8</div>
+                                        <div class="stat-label">Schools Helped</div>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon">
+                                        <i class="fas fa-award"></i>
+                                    </div>
+                                    <div class="stat-info">
+                                        <div class="stat-number">95</div>
+                                        <div class="stat-label">Impact Score</div>
+                                    </div>
                                 </div>
                             </div>
-                            
-                            <div class="stat-card">
-                                <div class="stat-icon">
-                                    <i class="fas fa-graduation-cap"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <div class="stat-number">8</div>
-                                    <div class="stat-label">Schools Helped</div>
-                                </div>
-                            </div>
-                            
-                            <div class="stat-card">
-                                <div class="stat-icon">
-                                    <i class="fas fa-award"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <div class="stat-number">95</div>
-                                    <div class="stat-label">Impact Score</div>
+                            <div class="recent-activity">
+                                <h4>Recent Activity</h4>
+                                <div class="activity-list" id="dashActivityList">
+                                    <p style="color: #6b7280; font-size: 0.9rem;">Loading activity...</p>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="recent-activity">
-                            <h4>Recent Activity</h4>
-                            <div class="activity-list">
-                                <div class="activity-item">
-                                    <div class="activity-icon">
-                                        <i class="fas fa-check-circle"></i>
-                                    </div>
-                                    <div class="activity-content">
-                                        <div class="activity-title">Donation Delivered</div>
-                                        <div class="activity-description">5 Desktop computers delivered to Kibera Primary School</div>
-                                        <div class="activity-date">2024-01-15</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="activity-item">
-                                    <div class="activity-icon">
-                                        <i class="fas fa-clock"></i>
-                                    </div>
-                                    <div class="activity-content">
-                                        <div class="activity-title">Processing Donation</div>
-                                        <div class="activity-description">3 Laptops currently being refurbished</div>
-                                        <div class="activity-date">2024-01-10</div>
-                                    </div>
-                                </div>
+                        <div id="donationsSection" class="dashboard-section">
+                            <h3>My Donations</h3>
+                            <div class="donations-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Type</th>
+                                            <th>Quantity</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="donationTableBody">
+                                        </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
-                    
-                    <div id="donationsSection" class="dashboard-section">
-                        <h3>My Donations</h3>
-                        <div class="donations-table">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Type</th>
-                                        <th>Quantity</th>
-                                        <th>Status</th>
-                                        <th>School</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>2024-01-15</td>
-                                        <td>Desktop Computers</td>
-                                        <td>5</td>
-                                        <td><span class="status delivered">Delivered</span></td>
-                                        <td>Kibera Primary School</td>
-                                    </tr>
-                                    <tr>
-                                        <td>2024-01-10</td>
-                                        <td>Laptops</td>
-                                        <td>3</td>
-                                        <td><span class="status processing">Processing</span></td>
-                                        <td>Pending Assignment</td>
-                                    </tr>
-                                    <tr>
-                                        <td>2023-12-20</td>
-                                        <td>Tablets</td>
-                                        <td>8</td>
-                                        <td><span class="status delivered">Delivered</span></td>
-                                        <td>Mombasa Secondary School</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+
+                    <div id="schoolDashboard" style="display: none;">
+                        <div id="schoolOverviewSection" class="dashboard-section">
+                            <h3>School Overview</h3>
+                            <div class="dashboard-buttons" style="margin-bottom: 2rem;">
+                                <button class="btn btn-primary" onclick="openRequestModal()">
+                                    <i class="fas fa-plus"></i> New Computer Request
+                                </button>
+                            </div>
+                            <div class="donations-table">
+                                <h4>My Requests</h4>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Type</th>
+                                            <th>Quantity</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="schoolRequestsBody">
+                                        </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="adminDashboard" style="display: none;">
+                        <div id="adminOverviewSection" class="dashboard-section">
+                            <h3>Admin Control Panel</h3>
+                            <div class="dashboard-stats">
+                                <div class="stat-card">
+                                    <div class="stat-icon"><i class="fas fa-box"></i></div>
+                                    <div class="stat-info">
+                                        <div class="stat-number" id="adminPendingDonations">0</div>
+                                        <div class="stat-label">Pending Donations</div>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon"><i class="fas fa-school"></i></div>
+                                    <div class="stat-info">
+                                        <div class="stat-number" id="adminPendingRequests">0</div>
+                                        <div class="stat-label">Pending Requests</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -886,17 +881,14 @@
                                 <label for="settingsName">Full Name</label>
                                 <input type="text" id="settingsName" name="name">
                             </div>
-                            
                             <div class="form-group">
                                 <label for="settingsEmail">Email Address</label>
                                 <input type="email" id="settingsEmail" name="email">
                             </div>
-                            
                             <div class="form-group">
                                 <label for="settingsOrganization">Organization</label>
                                 <input type="text" id="settingsOrganization" name="organization">
                             </div>
-                            
                             <div class="form-group">
                                 <label for="settingsLocation">Location</label>
                                 <select id="settingsLocation" name="location">
@@ -908,10 +900,10 @@
                                     <option value="other">Other</option>
                                 </select>
                             </div>
-                            
                             <button type="submit" class="btn btn-primary">Update Settings</button>
                         </form>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -919,4 +911,4 @@
 
     <script src="js/main.js"></script>
 </body>
-</html>
+</html> 
