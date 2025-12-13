@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import { supabase } from '../config/supabase.js';
-import { AuthRequest } from '../types/index.js';
+import { sendContactEmail } from '../utils/email.js';
 
 export const createContactMessage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -31,6 +31,14 @@ export const createContactMessage = async (req: Request, res: Response): Promise
       return;
     }
 
+
+    await sendContactEmail({
+      name,
+      email,
+      subject,
+      message
+    });
+
     res.status(201).json({
       message: 'Message sent successfully',
       contactMessage: data
@@ -41,7 +49,8 @@ export const createContactMessage = async (req: Request, res: Response): Promise
   }
 };
 
-export const getContactMessages = async (req: AuthRequest, res: Response): Promise<void> => {
+
+export const getContactMessages = async (req: Request, res: Response): Promise<void> => {
   try {
     const { status, page = 1, limit = 10 } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
@@ -109,4 +118,4 @@ export const updateMessageStatus = async (req: Request, res: Response): Promise<
     console.error('Update message status error:', error);
     res.status(500).json({ message: 'Server error' });
   }
-};
+}; 
