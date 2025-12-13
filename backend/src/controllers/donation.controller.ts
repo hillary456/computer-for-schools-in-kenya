@@ -89,8 +89,7 @@ export const getDonationById = async (req: Request, res: Response): Promise<void
       res.status(404).json({ message: 'Donation not found' });
       return;
     }
-
-    // Check authorization (users can only see their own donations unless admin)
+ 
     if (req.user?.user_type !== 'admin' && data.user_id !== req.user?.id) {
       res.status(403).json({ message: 'Access denied' });
       return;
@@ -102,13 +101,13 @@ export const getDonationById = async (req: Request, res: Response): Promise<void
     res.status(500).json({ message: 'Server error' });
   }
 };
+ 
 
 export const getUserDonations = async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
-
-    // Check authorization
-    if (req.user?.user_type !== 'admin' && req.user?.id !== Number(userId)) {
+ 
+    if (req.user?.user_type !== 'admin' && req.user?.id !== userId) {
       res.status(403).json({ message: 'Access denied' });
       return;
     }
@@ -130,6 +129,7 @@ export const getUserDonations = async (req: Request, res: Response): Promise<voi
     res.status(500).json({ message: 'Server error' });
   }
 };
+ 
 
 export const updateDonationStatus = async (req: Request, res: Response): Promise<void> => {
   try {

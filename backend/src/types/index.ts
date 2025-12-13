@@ -1,3 +1,5 @@
+import { Request } from 'express';
+
 export type UserRoleType = 'donor' | 'school' | 'admin';
 export type DonationComputerType = 'desktop' | 'laptop' | 'tablet' | 'mixed';
 export type DonationConditionType = 'working' | 'needs-repair' | 'not-working' | 'mixed';
@@ -13,7 +15,7 @@ export type SchoolLevelType = 'primary' | 'secondary' | 'tertiary';
 export type SchoolStatusType = 'active' | 'inactive';
 
 export interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   password: string;
@@ -27,7 +29,7 @@ export interface User {
 
 export interface Donation {
   id: number;
-  user_id?: number | null;
+  user_id?: string | null;
   donor_name: string;
   organization?: string | null;
   email: string;
@@ -45,7 +47,7 @@ export interface Donation {
 
 export interface SchoolRequest {
   id: number;
-  user_id: number;
+  user_id: string;
   school_name: string;
   contact_person: string;
   email: string;
@@ -86,13 +88,16 @@ export interface School {
 }
 
 export interface JWTPayload {
-  id: number;
+  id: string;
+  sub?: string;
   email: string;
   user_type: UserRoleType;
 }
 
+export interface AuthRequest extends Request {
+  user: JWTPayload;
+}
 
-// Extend Express Request interface to include user property
 declare global {
   namespace Express {
     interface Request {

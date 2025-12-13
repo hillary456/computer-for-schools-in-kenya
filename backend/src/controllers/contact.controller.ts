@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import { supabase } from '../config/supabase.js';
+import { AuthRequest } from '../types/index.js';
 
 export const createContactMessage = async (req: Request, res: Response): Promise<void> => {
   try {

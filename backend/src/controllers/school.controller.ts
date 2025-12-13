@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import { supabase } from '../config/supabase.js';
-
-// School Requests
+ 
 export const createSchoolRequest = async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
@@ -90,8 +89,7 @@ export const getSchoolRequestById = async (req: Request, res: Response): Promise
       res.status(404).json({ message: 'School request not found' });
       return;
     }
-
-    // Check authorization
+ 
     if (req.user?.user_type !== 'admin' && data.user_id !== req.user?.id) {
       res.status(403).json({ message: 'Access denied' });
       return;
@@ -108,8 +106,7 @@ export const getUserSchoolRequests = async (req: Request, res: Response): Promis
   try {
     const { userId } = req.params;
 
-    // Check authorization
-    if (req.user?.user_type !== 'admin' && req.user?.id !== Number(userId)) {
+    if (req.user?.user_type !== 'admin' && req.user?.id !== userId) {
       res.status(403).json({ message: 'Access denied' });
       return;
     }
@@ -164,8 +161,7 @@ export const updateRequestStatus = async (req: Request, res: Response): Promise<
     res.status(500).json({ message: 'Server error' });
   }
 };
-
-// Schools
+ 
 export const getSchools = async (req: Request, res: Response): Promise<void> => {
   try {
     const { location, status, page = 1, limit = 10 } = req.query;

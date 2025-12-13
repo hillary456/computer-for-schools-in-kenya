@@ -40,18 +40,26 @@ function getAuthHeaders() {
 function setupEventListeners() {
     document.querySelectorAll('.nav-link').forEach(link => link.addEventListener('click', handleNavClick));
     
+    // Forms
     const donationForm = document.getElementById('donationForm');
     if (donationForm) donationForm.addEventListener('submit', handleDonationSubmit);
+    
+    const dashDonationForm = document.getElementById('dashboardDonationForm');
+    if (dashDonationForm) dashDonationForm.addEventListener('submit', handleDonationSubmit);
     
     const contactForm = document.getElementById('contactForm');
     if (contactForm) contactForm.addEventListener('submit', handleContactSubmit);
     
     const authForm = document.getElementById('authForm');
     if (authForm) authForm.addEventListener('submit', handleAuthSubmit);
+
+    // Request Form (School)
+    const requestForm = document.getElementById('requestForm');
+    if (requestForm) requestForm.addEventListener('submit', handleRequestSubmit);
     
+    // UI Elements
     document.querySelectorAll('.user-type-btn').forEach(btn => btn.addEventListener('click', handleUserTypeSelect));
     window.addEventListener('click', handleModalClick);
-    document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', handleDashboardNavClick));
 
     const logoutBtn = document.getElementById('logoutBtn');
     if(logoutBtn) logoutBtn.addEventListener('click', logout);
@@ -160,14 +168,15 @@ function clearFieldError(e) {
  
 async function handleDonationSubmit(e) {
     e.preventDefault();
-    const formData = new FormData(e.target);
+    const formElement = e.target;
+    const formData = new FormData(formElement);
     const donationData = Object.fromEntries(formData.entries());
     
-    if (!validateForm(e.target)) return;
+    if (!validateForm(formElement)) return;
      
     if (currentUser && currentUser.user_id) donationData.user_id = currentUser.user_id;
     
-    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const submitBtn = formElement.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
     submitBtn.disabled = true;
@@ -181,10 +190,17 @@ async function handleDonationSubmit(e) {
         
         const result = await response.json();
         if (response.ok) {
-            e.target.reset();
-            showNotification('Thank you for your generous donation!', 'success'); 
+            formElement.reset();
+            showNotification('Thank you for your generous donation!', 'success');
+            
+            // IF user is a donor, refresh data and take them to the list
             if (currentUser && currentUser.type === 'donor') {
-                loadUserDashboardData();
+                await loadUserDashboardData();
+                
+                // If they submitted from the dashboard form, switch tab to 'donations'
+                if (formElement.id === 'dashboardDonationForm') {
+                    showDashboardSection('donations');
+                }
             }
         } else {
             showNotification(result.message || 'Submission failed', 'error');
@@ -384,7 +400,7 @@ async function handleAuthSubmit(e) {
                     user_id: result.user.id, 
                     name: result.user.name,
                     email: result.user.email,
-                    type: result.user.user_type,
+                    type: result.user.user_type, // Saved as 'type'
                     organization: result.user.organization || '',
                     location: result.user.location || ''
                 };
@@ -423,37 +439,70 @@ function openDashboard() {
     modal.style.display = 'block';
     document.body.style.overflow = 'hidden';
     
-    if (currentUser) { 
+    if (currentUser) {
+        // Update header info
         const userNameEl = document.getElementById('dashboardUserName');
         const userTypeEl = document.getElementById('dashboardUserType');
         if(userNameEl) userNameEl.textContent = currentUser.name;
+        // Use 'type' property consistently
         if(userTypeEl) userTypeEl.textContent = currentUser.type;
         updateSettingsForm();
- 
+
+        // 1. Manage Sidebar Navigation (Show/Hide based on role)
+        const donorNav = document.getElementById('donorNav');
+        const schoolNav = document.getElementById('schoolNav');
+        const adminNav = document.getElementById('adminNav');
+        
+        if (donorNav) donorNav.style.display = 'none';
+        if (schoolNav) schoolNav.style.display = 'none';
+        if (adminNav) adminNav.style.display = 'none';
+
+        // 2. Hide all main views
         const views = ['donorDashboard', 'schoolDashboard', 'adminDashboard'];
         views.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
- 
+
+        // 3. Logic per role
+        // Check currentUser.type, NOT currentUser.user_type
         if (currentUser.type === 'school') {
+            if (schoolNav) schoolNav.style.display = 'block';
             const schoolDash = document.getElementById('schoolDashboard');
             if (schoolDash) schoolDash.style.display = 'block';
             showDashboardSection('schoolOverview');
             loadSchoolDashboardData();
         } 
         else if (currentUser.type === 'admin') {
+            if (adminNav) adminNav.style.display = 'block';
             const adminDash = document.getElementById('adminDashboard');
             if (adminDash) adminDash.style.display = 'block';
             showDashboardSection('adminOverview');
             loadAdminDashboardData();
         } 
-        else { 
+        else {
+            // Default: Donor
+            if (donorNav) donorNav.style.display = 'block';
             const donorDash = document.getElementById('donorDashboard');
             if (donorDash) donorDash.style.display = 'block';
             showDashboardSection('overview');
             loadUserDashboardData();
+            
+            // Pre-fill dashboard donation form
+            prefillDashboardDonationForm();
         }
+    }
+}
+
+function prefillDashboardDonationForm() {
+    if (!currentUser) return;
+    
+    if(document.getElementById('dashDonorName')) document.getElementById('dashDonorName').value = currentUser.name || '';
+    if(document.getElementById('dashEmail')) document.getElementById('dashEmail').value = currentUser.email || '';
+    if(document.getElementById('dashOrganization')) document.getElementById('dashOrganization').value = currentUser.organization || '';
+    
+    if(document.getElementById('dashAddress') && currentUser.location) {
+        document.getElementById('dashAddress').value = currentUser.location; 
     }
 }
 
@@ -467,20 +516,15 @@ function showDashboardSection(sectionName) {
     document.querySelectorAll('.dashboard-section').forEach(section => section.classList.remove('active'));
     const targetSection = document.getElementById(sectionName + 'Section');
     if(targetSection) targetSection.classList.add('active');
+    
+    // Update active nav item
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
-        if(item.textContent.toLowerCase().trim() === sectionName.toLowerCase()) item.classList.add('active');
+        const onclickAttr = item.getAttribute('onclick');
+        if (onclickAttr && onclickAttr.includes(`'${sectionName}'`)) {
+            item.classList.add('active');
+        }
     });
-}
-
-function handleDashboardNavClick(e) {
-    const sectionName = e.target.textContent.toLowerCase().trim(); 
-    let targetSection = sectionName;
-    if (sectionName === 'overview') {
-        if (currentUser.type === 'school') targetSection = 'schoolOverview';
-        else if (currentUser.type === 'admin') targetSection = 'adminOverview';
-    }
-    showDashboardSection(targetSection);
 }
 
 function updateSettingsForm() {
@@ -500,11 +544,14 @@ function logout() {
     sessionStorage.removeItem('authToken');
     closeDashboard();
     showNotification('Logged out.', 'success');
+    // Reload to clear state
+    window.location.reload();
 }
 
 function handleModalClick(e) {
     if (e.target === document.getElementById('authModal')) closeAuthModal();
     if (e.target === document.getElementById('dashboardModal')) closeDashboard();
+    if (e.target === document.getElementById('requestModal')) closeRequestModal();
 }
 
 function animateOnScroll() {
@@ -528,7 +575,10 @@ window.addEventListener('scroll', () => {
 const style = document.createElement('style');
 style.textContent = `@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .notification-content { display: flex; align-items: center; gap: 12px; } .notification-close { background: none; border: none; color: inherit; cursor: pointer; padding: 4px; border-radius: 4px; transition: background-color 0.2s; } .notification-close:hover { background-color: rgba(255, 255, 255, 0.2); } .error { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important; } .hamburger.active span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); } .hamburger.active span:nth-child(2) { opacity: 0; } .hamburger.active span:nth-child(3) { transform: rotate(-45deg) translate(7px, -6px); }`;
 document.head.appendChild(style);
- 
+
+/* =========================================
+   DONOR Dashboard Logic
+   ========================================= */
 
 async function loadUserDashboardData() {
     if (!currentUser || !currentUser.user_id) return;
@@ -639,7 +689,10 @@ function renderRecentActivity(donations) {
         activityList.innerHTML += item;
     });
 }
- 
+
+/* =========================================
+   SCHOOL Dashboard Logic
+   ========================================= */
 
 async function loadSchoolDashboardData() {
     if (!currentUser || !currentUser.user_id) return;
@@ -686,7 +739,69 @@ function renderSchoolRequests(requests) {
         `;
         tbody.innerHTML += row;
     });
-}  
+}
+
+function openRequestModal() {
+    const modal = document.getElementById('requestModal');
+    if (modal) {
+        modal.style.display = 'block';
+        // Pre-fill
+        if(currentUser) {
+            const form = document.getElementById('requestForm');
+            if(form) {
+                if(form.querySelector('[name="school_name"]')) form.querySelector('[name="school_name"]').value = currentUser.organization || '';
+                if(form.querySelector('[name="email"]')) form.querySelector('[name="email"]').value = currentUser.email || '';
+                if(form.querySelector('[name="contact_person"]')) form.querySelector('[name="contact_person"]').value = currentUser.name || '';
+                if(form.querySelector('[name="location"]')) form.querySelector('[name="location"]').value = currentUser.location || '';
+            }
+        }
+    }
+}
+
+function closeRequestModal() {
+    const modal = document.getElementById('requestModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleRequestSubmit(e) {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const requestData = Object.fromEntries(formData.entries());
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+    submitBtn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_URL}/schools/requests`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(requestData)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            e.target.reset();
+            closeRequestModal();
+            showNotification('Request submitted successfully!', 'success');
+            loadSchoolDashboardData(); 
+        } else {
+            showNotification(result.message || 'Submission failed', 'error');
+        }
+    } catch (error) {
+        console.error(error);
+        showNotification('Connection error', 'error');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
+/* =========================================
+   ADMIN Dashboard Logic
+   ========================================= */
 
 async function loadAdminDashboardData() {
     try {
@@ -695,7 +810,8 @@ async function loadAdminDashboardData() {
         });
 
         if (response.ok) {
-            const data = await response.json(); 
+            const data = await response.json();
+            // Update the stats cards
             const pendingDonationsEl = document.getElementById('adminPendingDonations');
             const pendingRequestsEl = document.getElementById('adminPendingRequests');
             
@@ -708,7 +824,10 @@ async function loadAdminDashboardData() {
         console.error('Error loading admin stats:', error);
     }
 }
- 
+
+/* =========================================
+   Shared Utilities
+   ========================================= */
 
 function getStatusClass(status) {
     switch (status) {
@@ -720,4 +839,4 @@ function getStatusClass(status) {
         case 'rejected': return 'error';      
         default: return '';
     }
-} 
+}

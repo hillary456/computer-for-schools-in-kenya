@@ -17,10 +17,18 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as unknown as JWTPayload;
-    req.user = decoded;
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+     
+    const userPayload: JWTPayload = {
+      id: decoded.sub || decoded.id,  
+      email: decoded.email,
+      user_type: decoded.user_metadata?.user_type || decoded.user_type || 'donor'  
+    };
+
+    req.user = userPayload;
     next();
   } catch (error) {
+    console.error('Token verification failed:', error);  
     res.status(403).json({ message: 'Invalid or expired token' });
   }
 };
@@ -39,4 +47,4 @@ export const authorizeRoles = (...roles: UserRoleType[]) => {
 
     next();
   };
-};
+}; 
