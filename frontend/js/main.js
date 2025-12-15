@@ -39,8 +39,7 @@ function getAuthHeaders() {
 
 function setupEventListeners() {
     document.querySelectorAll('.nav-link').forEach(link => link.addEventListener('click', handleNavClick));
-    
-    // Forms
+     
     const donationForm = document.getElementById('donationForm');
     if (donationForm) donationForm.addEventListener('submit', handleDonationSubmit);
     
@@ -52,12 +51,11 @@ function setupEventListeners() {
     
     const authForm = document.getElementById('authForm');
     if (authForm) authForm.addEventListener('submit', handleAuthSubmit);
-
-    // Request Form (School)
+ 
     const requestForm = document.getElementById('requestForm');
     if (requestForm) requestForm.addEventListener('submit', handleRequestSubmit);
     
-    // UI Elements
+     
     document.querySelectorAll('.user-type-btn').forEach(btn => btn.addEventListener('click', handleUserTypeSelect));
     window.addEventListener('click', handleModalClick);
 
@@ -192,12 +190,10 @@ async function handleDonationSubmit(e) {
         if (response.ok) {
             formElement.reset();
             showNotification('Thank you for your generous donation!', 'success');
-            
-            // IF user is a donor, refresh data and take them to the list
+             
             if (currentUser && currentUser.type === 'donor') {
                 await loadUserDashboardData();
-                
-                // If they submitted from the dashboard form, switch tab to 'donations'
+                 
                 if (formElement.id === 'dashboardDonationForm') {
                     showDashboardSection('donations');
                 }
@@ -400,7 +396,7 @@ async function handleAuthSubmit(e) {
                     user_id: result.user.id, 
                     name: result.user.name,
                     email: result.user.email,
-                    type: result.user.user_type, // Saved as 'type'
+                    type: result.user.user_type,  
                     organization: result.user.organization || '',
                     location: result.user.location || ''
                 };
@@ -440,15 +436,12 @@ function openDashboard() {
     document.body.style.overflow = 'hidden';
     
     if (currentUser) {
-        // Update header info
         const userNameEl = document.getElementById('dashboardUserName');
         const userTypeEl = document.getElementById('dashboardUserType');
         if(userNameEl) userNameEl.textContent = currentUser.name;
-        // Use 'type' property consistently
         if(userTypeEl) userTypeEl.textContent = currentUser.type;
         updateSettingsForm();
-
-        // 1. Manage Sidebar Navigation (Show/Hide based on role)
+ 
         const donorNav = document.getElementById('donorNav');
         const schoolNav = document.getElementById('schoolNav');
         const adminNav = document.getElementById('adminNav');
@@ -457,15 +450,13 @@ function openDashboard() {
         if (schoolNav) schoolNav.style.display = 'none';
         if (adminNav) adminNav.style.display = 'none';
 
-        // 2. Hide all main views
+         
         const views = ['donorDashboard', 'schoolDashboard', 'adminDashboard'];
         views.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
-
-        // 3. Logic per role
-        // Check currentUser.type, NOT currentUser.user_type
+ 
         if (currentUser.type === 'school') {
             if (schoolNav) schoolNav.style.display = 'block';
             const schoolDash = document.getElementById('schoolDashboard');
@@ -480,15 +471,12 @@ function openDashboard() {
             showDashboardSection('adminOverview');
             loadAdminDashboardData();
         } 
-        else {
-            // Default: Donor
+        else { 
             if (donorNav) donorNav.style.display = 'block';
             const donorDash = document.getElementById('donorDashboard');
             if (donorDash) donorDash.style.display = 'block';
             showDashboardSection('overview');
             loadUserDashboardData();
-            
-            // Pre-fill dashboard donation form
             prefillDashboardDonationForm();
         }
     }
@@ -516,8 +504,7 @@ function showDashboardSection(sectionName) {
     document.querySelectorAll('.dashboard-section').forEach(section => section.classList.remove('active'));
     const targetSection = document.getElementById(sectionName + 'Section');
     if(targetSection) targetSection.classList.add('active');
-    
-    // Update active nav item
+     
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
         const onclickAttr = item.getAttribute('onclick');
@@ -544,7 +531,6 @@ function logout() {
     sessionStorage.removeItem('authToken');
     closeDashboard();
     showNotification('Logged out.', 'success');
-    // Reload to clear state
     window.location.reload();
 }
 
@@ -576,9 +562,7 @@ const style = document.createElement('style');
 style.textContent = `@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .notification-content { display: flex; align-items: center; gap: 12px; } .notification-close { background: none; border: none; color: inherit; cursor: pointer; padding: 4px; border-radius: 4px; transition: background-color 0.2s; } .notification-close:hover { background-color: rgba(255, 255, 255, 0.2); } .error { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important; } .hamburger.active span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); } .hamburger.active span:nth-child(2) { opacity: 0; } .hamburger.active span:nth-child(3) { transform: rotate(-45deg) translate(7px, -6px); }`;
 document.head.appendChild(style);
 
-/* =========================================
-   DONOR Dashboard Logic
-   ========================================= */
+ 
 
 async function loadUserDashboardData() {
     if (!currentUser || !currentUser.user_id) return;
@@ -689,10 +673,7 @@ function renderRecentActivity(donations) {
         activityList.innerHTML += item;
     });
 }
-
-/* =========================================
-   SCHOOL Dashboard Logic
-   ========================================= */
+ 
 
 async function loadSchoolDashboardData() {
     if (!currentUser || !currentUser.user_id) return;
@@ -745,7 +726,6 @@ function openRequestModal() {
     const modal = document.getElementById('requestModal');
     if (modal) {
         modal.style.display = 'block';
-        // Pre-fill
         if(currentUser) {
             const form = document.getElementById('requestForm');
             if(form) {
@@ -798,20 +778,16 @@ async function handleRequestSubmit(e) {
         submitBtn.disabled = false;
     }
 }
+ 
 
-/* =========================================
-   ADMIN Dashboard Logic
-   ========================================= */
-
-async function loadAdminDashboardData() {
+async function loadAdminDashboardData() { 
     try {
         const response = await fetch(`${API_URL}/stats/dashboard`, {
             headers: getAuthHeaders()
         });
 
         if (response.ok) {
-            const data = await response.json();
-            // Update the stats cards
+            const data = await response.json(); 
             const pendingDonationsEl = document.getElementById('adminPendingDonations');
             const pendingRequestsEl = document.getElementById('adminPendingRequests');
             
@@ -823,11 +799,143 @@ async function loadAdminDashboardData() {
     } catch (error) {
         console.error('Error loading admin stats:', error);
     }
+ 
+    loadAdminDonations();
+    loadAdminRequests();
+}
+ 
+async function loadAdminDonations() {
+    try { 
+        const response = await fetch(`${API_URL}/donations?status=pending`, {
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            const data = await response.json();
+            renderAdminDonationsTable(data.donations || []);
+        }
+    } catch (error) { console.error('Admin donations error:', error); }
 }
 
-/* =========================================
-   Shared Utilities
-   ========================================= */
+function renderAdminDonationsTable(donations) {
+    const tbody = document.getElementById('adminDonationsBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (donations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No pending donations.</td></tr>';
+        return;
+    }
+
+    donations.forEach(donation => {
+        const date = new Date(donation.created_at).toLocaleDateString();
+        tbody.innerHTML += `
+            <tr>
+                <td>${date}</td>
+                <td>${donation.donor_name}</td>
+                <td style="text-transform: capitalize;">${donation.computer_type}</td>
+                <td>${donation.quantity}</td>
+                <td><span class="status ${getStatusClass(donation.status)}">${donation.status}</span></td>
+                <td>
+                    <button class="btn-icon approve" title="Approve" style="background-color: #dcfce7; color: #166534; border: none; padding: 6px 10px; cursor: pointer;" onclick="updateDonationStatus('${donation.id}', 'approved')">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="btn-icon reject" title="Reject" style="background-color: #fee2e2; color: #991b1b; border: none; padding: 6px 10px; cursor: pointer;" onclick="updateDonationStatus('${donation.id}', 'rejected')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+async function updateDonationStatus(id, status) {
+    if(!confirm(`Are you sure you want to mark this donation as ${status}?`)) return;
+
+    try {
+        const response = await fetch(`${API_URL}/donations/${id}/status`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ status })
+        });
+
+        if (response.ok) {
+            showNotification(`Donation marked as ${status}`, 'success');
+            loadAdminDashboardData();  
+        } else {
+            showNotification('Failed to update status', 'error');
+        }
+    } catch (error) {
+        console.error(error);
+        showNotification('Connection error', 'error');
+    }
+}
+ 
+async function loadAdminRequests() {
+    try { 
+        const response = await fetch(`${API_URL}/schools/requests?status=pending`, {
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            const data = await response.json();
+            renderAdminRequestsTable(data.requests || []);
+        }
+    } catch (error) { console.error('Admin requests error:', error); }
+}
+
+function renderAdminRequestsTable(requests) {
+    const tbody = document.getElementById('adminRequestsBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (requests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No pending requests.</td></tr>';
+        return;
+    }
+
+    requests.forEach(req => {
+        const date = new Date(req.created_at).toLocaleDateString();
+        tbody.innerHTML += `
+            <tr>
+                <td>${date}</td>
+                <td>${req.school_name}</td>
+                <td style="text-transform: capitalize;">${req.computer_type}</td>
+                <td>${req.quantity}</td>
+                <td><span class="status ${getStatusClass(req.status)}">${req.status}</span></td>
+                <td>
+                    <button class="btn-icon approve" title="Approve" style="background-color: #dcfce7; color: #166534; border: none; padding: 6px 10px; cursor: pointer;" onclick="updateRequestStatus('${req.id}', 'approved')">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="btn-icon reject" title="Reject" style="background-color: #fee2e2; color: #991b1b; border: none; padding: 6px 10px; cursor: pointer;" onclick="updateRequestStatus('${req.id}', 'rejected')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+async function updateRequestStatus(id, status) {
+    if(!confirm(`Are you sure you want to mark this request as ${status}?`)) return;
+
+    try {
+        const response = await fetch(`${API_URL}/schools/requests/${id}/status`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ status })
+        });
+
+        if (response.ok) {
+            showNotification(`Request marked as ${status}`, 'success');
+            loadAdminDashboardData(); 
+        } else {
+            showNotification('Failed to update status', 'error');
+        }
+    } catch (error) {
+        console.error(error);
+        showNotification('Connection error', 'error');
+    }
+}
+ 
 
 function getStatusClass(status) {
     switch (status) {

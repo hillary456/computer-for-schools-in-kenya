@@ -793,7 +793,13 @@
 
                         <div class="nav-group" id="adminNav" style="display: none;">
                             <button class="nav-item" onclick="showDashboardSection('adminOverview')">
-                                <i class="fas fa-shield-alt"></i> Admin Panel
+                                <i class="fas fa-chart-line"></i> Overview
+                            </button>
+                            <button class="nav-item" onclick="showDashboardSection('adminDonations')">
+                                <i class="fas fa-box-open"></i> Manage Donations
+                            </button>
+                            <button class="nav-item" onclick="showDashboardSection('adminRequests')">
+                                <i class="fas fa-school"></i> Manage Requests
                             </button>
                         </div>
 
@@ -960,6 +966,7 @@
                     </div>
 
                     <div id="adminDashboard" style="display: none;">
+
                         <div id="adminOverviewSection" class="dashboard-section">
                             <h3>Admin Control Panel</h3>
                             <div class="dashboard-stats">
@@ -979,6 +986,47 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div id="adminDonationsSection" class="dashboard-section">
+                            <h3>Incoming Donations</h3>
+                            <div class="donations-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Donor</th>
+                                            <th>Type</th>
+                                            <th>Qty</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="adminDonationsBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div id="adminRequestsSection" class="dashboard-section">
+                            <h3>School Requests</h3>
+                            <div class="donations-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>School</th>
+                                            <th>Type</th>
+                                            <th>Qty</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="adminRequestsBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
                     </div>
 
                     <div id="settingsSection" class="dashboard-section">
@@ -1061,7 +1109,8 @@
                 </div>
                 <div class="form-group">
                     <label>Justification *</label>
-                    <textarea name="justification" rows="4" required placeholder="Why does your school need these computers?"></textarea>
+                    <textarea name="justification" rows="4" required
+                        placeholder="Why does your school need these computers?"></textarea>
                 </div>
                 <button type="submit" class="btn btn-primary btn-full">Submit Request</button>
             </form>

@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
-import { supabase } from '../config/supabase.js';
- 
+// FIX 1: Import supabaseAdmin to allow bypassing RLS for updates
+import { supabase, supabaseAdmin } from '../config/supabase.js';
+
 export const createSchoolRequest = async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
@@ -89,7 +90,7 @@ export const getSchoolRequestById = async (req: Request, res: Response): Promise
       res.status(404).json({ message: 'School request not found' });
       return;
     }
- 
+
     if (req.user?.user_type !== 'admin' && data.user_id !== req.user?.id) {
       res.status(403).json({ message: 'Access denied' });
       return;
@@ -139,29 +140,36 @@ export const updateRequestStatus = async (req: Request, res: Response): Promise<
 
     const { id } = req.params;
     const { status } = req.body;
+    const requestId = parseInt(id, 10);
 
-    const { data, error } = await supabase
+    // FIX 2: Use supabaseAdmin to bypass RLS and .select() to avoid crashes
+    const { data, error } = await supabaseAdmin
       .from('school_requests')
       .update({ status })
-      .eq('id', id)
-      .select()
-      .single();
+      .eq('id', requestId)
+      .select();
 
-    if (error || !data) {
-      res.status(404).json({ message: 'School request not found' });
+    if (error) {
+      console.error('Update request status error:', error);
+      res.status(500).json({ message: error.message });
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      res.status(404).json({ message: 'School request not found or permission denied' });
       return;
     }
 
     res.json({
       message: 'Request status updated successfully',
-      request: data
+      request: data[0]
     });
   } catch (error) {
     console.error('Update request status error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
- 
+
 export const getSchools = async (req: Request, res: Response): Promise<void> => {
   try {
     const { location, status, page = 1, limit = 10 } = req.query;
@@ -223,4 +231,4 @@ export const getSchoolById = async (req: Request, res: Response): Promise<void> 
     console.error('Get school error:', error);
     res.status(500).json({ message: 'Server error' });
   }
-};
+}; 

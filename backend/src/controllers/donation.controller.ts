@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 
 export const createDonation = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -89,7 +89,7 @@ export const getDonationById = async (req: Request, res: Response): Promise<void
       res.status(404).json({ message: 'Donation not found' });
       return;
     }
- 
+
     if (req.user?.user_type !== 'admin' && data.user_id !== req.user?.id) {
       res.status(403).json({ message: 'Access denied' });
       return;
@@ -101,12 +101,11 @@ export const getDonationById = async (req: Request, res: Response): Promise<void
     res.status(500).json({ message: 'Server error' });
   }
 };
- 
 
 export const getUserDonations = async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
- 
+
     if (req.user?.user_type !== 'admin' && req.user?.id !== userId) {
       res.status(403).json({ message: 'Access denied' });
       return;
@@ -129,7 +128,6 @@ export const getUserDonations = async (req: Request, res: Response): Promise<voi
     res.status(500).json({ message: 'Server error' });
   }
 };
- 
 
 export const updateDonationStatus = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -141,22 +139,30 @@ export const updateDonationStatus = async (req: Request, res: Response): Promise
 
     const { id } = req.params;
     const { status } = req.body;
+    const donationId = parseInt(id, 10);
 
-    const { data, error } = await supabase
+    console.log(`[DEBUG] Updating Donation ID: ${donationId} to Status: ${status}`);
+ 
+    const { data, error } = await supabaseAdmin
       .from('donations')
       .update({ status })
-      .eq('id', id)
-      .select()
-      .single();
+      .eq('id', donationId)
+      .select();
 
-    if (error || !data) {
-      res.status(404).json({ message: 'Donation not found' });
+    if (error) {
+      console.error('[DEBUG] Update error:', error);
+      res.status(500).json({ message: error.message });
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      res.status(404).json({ message: 'Donation not found or permission denied' });
       return;
     }
 
     res.json({
       message: 'Donation status updated successfully',
-      donation: data
+      donation: data[0]
     });
   } catch (error) {
     console.error('Update donation status error:', error);

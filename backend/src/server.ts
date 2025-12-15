@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+dotenv.config();
 import authRoutes from './routes/auth.routes.js';
 import donationRoutes from './routes/donation.routes.js';
 import contactRoutes from './routes/contact.routes.js';
@@ -8,7 +9,7 @@ import schoolRoutes from './routes/school.routes.js';
 import statsRoutes from './routes/stats.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
-dotenv.config();
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
