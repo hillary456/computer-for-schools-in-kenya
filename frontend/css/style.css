@@ -718,7 +718,8 @@ section {
 }
 
 .nairobi { background: #2563eb; }
-.mombasa { background: #16a34a; }
+.nyeri {background:#16a34a; }
+.mombasa { background: #a35516; }
 .kisumu { background: #eab308; }
 .nakuru { background: #a855f7; }
 .eldoret { background: #ef4444; }
@@ -1491,6 +1492,26 @@ section {
     border-radius: 20px;
     font-size: 0.75rem;
     font-weight: 500;
+}
+.status-select {
+    padding: 6px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background-color: white;
+    font-size: 0.875rem;
+    color: #374151;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.status-select:hover {
+    border-color: #2563eb;
+}
+
+.status-select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
 .status.delivered {

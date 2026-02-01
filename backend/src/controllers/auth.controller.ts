@@ -4,8 +4,15 @@ import { User } from '../types/index.js';
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { name, email, password, user_type, organization, phone, location } = req.body;
+    const { name, email, password, user_type, organization, phone, location, admin_secret } = req.body;
 
+    
+    if (user_type === 'admin') {
+      const ADMIN_KEY = process.env.ADMIN_REGISTRATION_KEY;
+      if (!admin_secret || admin_secret !== ADMIN_KEY) {
+        return res.status(403).json({ message: 'Invalid or missing Admin Secret Key.' });
+      }
+    }
 
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -79,4 +86,4 @@ export const login = async (req: Request, res: Response) => {
     console.error('Login error:', e);
     res.status(500).json({ message: 'Server error during login' });
   }
-};
+}; 

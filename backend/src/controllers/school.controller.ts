@@ -232,3 +232,49 @@ export const getSchoolById = async (req: Request, res: Response): Promise<void> 
     res.status(500).json({ message: 'Server error' });
   }
 }; 
+ 
+
+export const fulfillSchoolRequest = async (req: Request, res: Response): Promise<void> => {
+  const { requestId, inventoryItemIds } = req.body; // IDs from computer_inventory table
+
+  try {
+    // 1. Update inventory status and link to the request
+    const { error: invError } = await supabaseAdmin
+      .from('computer_inventory')
+      .update({ 
+        status: 'delivered', 
+        assigned_school_id: requestId 
+      })
+      .in('id', inventoryItemIds);
+
+    if (invError) throw invError;
+
+    // 2. Mark the school request as fulfilled
+    const { error: reqError } = await supabaseAdmin
+      .from('school_requests')
+      .update({ status: 'fulfilled' })
+      .eq('id', requestId);
+
+    if (reqError) throw reqError;
+
+    // 3. Update the total computers received for the school record
+    // Note: This assumes school_requests.school_name matches schools.name
+    const { data: requestData } = await supabase
+      .from('school_requests')
+      .select('school_name')
+      .eq('id', requestId)
+      .single();
+
+    if (requestData) {
+      await supabaseAdmin.rpc('increment_school_computers', { 
+        s_name: requestData.school_name, 
+        count: inventoryItemIds.length 
+      });
+    }
+
+    res.json({ message: 'Request fulfilled and inventory updated successfully' });
+  } catch (error: any) {
+    console.error('Fulfillment error:', error);
+    res.status(500).json({ message: error.message || 'Failed to fulfill request' });
+  }
+};

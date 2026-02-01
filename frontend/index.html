@@ -416,7 +416,7 @@
                         <div class="region-icon eldoret">
                             <i class="fas fa-map-marker-alt"></i>
                         </div>
-                        <h4>Moi Girls Eldoret</h4>
+                        <h4>Nyeri</h4>
                         <div class="region-number">54</div>
                         <div class="region-label">Schools</div>
                     </div>
@@ -702,6 +702,12 @@
             </div>
 
             <form id="authForm" class="auth-form">
+                <div id="adminSecretField" class="form-group" style="display: none;">
+                    <label for="adminSecret">Admin Registration Key *</label>
+                    <input type="password" id="adminSecret" name="admin_secret" autocomplete="new-password"
+                        placeholder="Enter secret key">
+                </div>
+
                 <div id="nameField" class="form-group" style="display: none;">
                     <label for="authName">Full Name *</label>
                     <input type="text" id="authName" name="name">
@@ -709,12 +715,12 @@
 
                 <div class="form-group">
                     <label for="authEmail">Email Address *</label>
-                    <input type="email" id="authEmail" name="email" required>
+                    <input type="email" id="authEmail" name="email" autocomplete="email" required>
                 </div>
 
                 <div class="form-group">
                     <label for="authPassword">Password *</label>
-                    <input type="password" id="authPassword" name="password" required>
+                    <input type="password" id="authPassword" name="password" autcomplete="current-password" required>
                 </div>
 
                 <div id="confirmPasswordField" class="form-group" style="display: none;">
@@ -732,6 +738,7 @@
                     <select id="location" name="location">
                         <option value="">Select your location</option>
                         <option value="nairobi">Nairobi</option>
+                        <option value="nyeri">Nyeri</option>
                         <option value="mombasa">Mombasa</option>
                         <option value="kisumu">Kisumu</option>
                         <option value="nakuru">Nakuru</option>
@@ -795,6 +802,9 @@
                             <button class="nav-item" onclick="showDashboardSection('adminOverview')">
                                 <i class="fas fa-chart-line"></i> Overview
                             </button>
+                            <button class="nav-item" onclick="showDashboardSection('adminInventory')">
+                                <i class="fas fa-laptop-code"></i> Inventory Stock
+                            </button>
                             <button class="nav-item" onclick="showDashboardSection('adminDonations')">
                                 <i class="fas fa-box-open"></i> Manage Donations
                             </button>
@@ -825,14 +835,14 @@
                                 <div class="stat-card">
                                     <div class="stat-icon"><i class="fas fa-graduation-cap"></i></div>
                                     <div class="stat-info">
-                                        <div class="stat-number">8</div>
+                                        <div class="stat-number" id="dashSchoolsHelped">0</div>
                                         <div class="stat-label">Schools Helped</div>
                                     </div>
                                 </div>
                                 <div class="stat-card">
                                     <div class="stat-icon"><i class="fas fa-award"></i></div>
                                     <div class="stat-info">
-                                        <div class="stat-number">95</div>
+                                        <div class="stat-number" id="dashImpactScore">0</div>
                                         <div class="stat-label">Impact Score</div>
                                     </div>
                                 </div>
@@ -984,9 +994,48 @@
                                         <div class="stat-label">Pending Requests</div>
                                     </div>
                                 </div>
+
+                                <div class="stat-card">
+                                    <div class="stat-icon" style="background: #dcfce7; color: #166534;">
+                                        <i class="fas fa-check-circle"></i>
+                                    </div>
+                                    <div class="stat-info">
+                                        <div class="stat-number" id="totalComputersDonated">0</div>
+                                        <div class="stat-label">Total Delivered</div>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon" style="background: #dbeafe; color: #1e40af;">
+                                        <i class="fas fa-user-graduate"></i>
+                                    </div>
+                                    <div class="stat-info">
+                                        <div class="stat-number" id="studentsReached">0</div>
+                                        <div class="stat-label">Students Reached</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-
+                        <div id="adminInventorySection" class="dashboard-section">
+                            <h3>Computer Inventory stock</h3>
+                            <div class="donations-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Serial Number</th>
+                                            <th>Type</th>
+                                            <th>Condition</th>
+                                            <th>Status</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="adminInventoryBody">
+                                        <tr>
+                                            <td colspan="5" style="text-align:center;">Loading inventory...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                         <div id="adminDonationsSection" class="dashboard-section">
                             <h3>Incoming Donations</h3>
                             <div class="donations-table">
@@ -1016,7 +1065,7 @@
                                             <th>Date</th>
                                             <th>School</th>
                                             <th>Type</th>
-                                            <th>Qty</th>
+                                            l <th>Qty</th>
                                             <th>Status</th>
                                             <th>Actions</th>
                                         </tr>
@@ -1048,6 +1097,7 @@
                                 <label for="settingsLocation">Location</label>
                                 <select id="settingsLocation" name="location">
                                     <option value="nairobi">Nairobi</option>
+                                    <option value="nyeri">Nyeri</option>
                                     <option value="mombasa">Mombasa</option>
                                     <option value="kisumu">Kisumu</option>
                                     <option value="nakuru">Nakuru</option>
@@ -1072,21 +1122,21 @@
             <form id="requestForm" class="auth-form">
                 <div class="form-group">
                     <label>School Name *</label>
-                    <input type="text" name="school_name" required>
+                    <input type="text" id="req_school_name" name="school_name" autocomplete="organization" required>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Contact Person *</label>
-                        <input type="text" name="contact_person" required>
+                        <input type="text" id="req_contact_person" name="contact_person" autocomplete="name" required>
                     </div>
                     <div class="form-group">
                         <label>Phone *</label>
-                        <input type="tel" name="phone" required>
+                        <input type="tel" id="req_phone" name="phone" autocomplete="tel" required>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Email *</label>
-                    <input type="email" name="email" required>
+                    <label>Email Address *</label>
+                    <input type="email" id="authEmail" name="email" autcomplete="email" required>
                 </div>
                 <div class="form-group">
                     <label>Location *</label>
@@ -1108,11 +1158,34 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Justification *</label>
-                    <textarea name="justification" rows="4" required
+                    <label>Reason for Request *</label>
+                    <textarea name="justification" id="justification" rows="4" required
                         placeholder="Why does your school need these computers?"></textarea>
                 </div>
                 <button type="submit" class="btn btn-primary btn-full">Submit Request</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="fulfillmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Assign Computer to School</h2>
+                <span class="close" onclick="closeFulfillmentModal()">&times;</span>
+            </div>
+            <form id="fulfillmentForm" class="auth-form">
+                <input type="hidden" id="fulfillInventoryId" name="inventoryId">
+
+                <div class="form-group">
+                    <label for="schoolSelect">Select Approved School Request</label>
+                    <select id="schoolSelect" name="requestId" required>
+                        <option value="">Loading requests...</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full">
+                    Confirm Assignment
+                </button>
             </form>
         </div>
     </div>
