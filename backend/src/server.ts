@@ -7,6 +7,7 @@ import donationRoutes from './routes/donation.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import schoolRoutes from './routes/school.routes.js';
 import statsRoutes from './routes/stats.routes.js';
+import inventoryRoutes from './routes/inventroy.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 
@@ -34,6 +35,7 @@ app.use('/api/donations', donationRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/schools', schoolRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // 404 handler
 app.use((req, res) => {

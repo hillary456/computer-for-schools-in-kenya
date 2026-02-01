@@ -129,6 +129,8 @@ export const getUserDonations = async (req: Request, res: Response): Promise<voi
   }
 };
 
+// backend/src/controllers/donation.controller.ts
+
 export const updateDonationStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
@@ -141,8 +143,42 @@ export const updateDonationStatus = async (req: Request, res: Response): Promise
     const { status } = req.body;
     const donationId = parseInt(id, 10);
 
-    console.log(`[DEBUG] Updating Donation ID: ${donationId} to Status: ${status}`);
- 
+    // 1. Fetch the current donation details first
+    const { data: donation, error: fetchError } = await supabaseAdmin
+      .from('donations')
+      .select('*')
+      .eq('id', donationId)
+      .single();
+
+    if (fetchError || !donation) {
+      res.status(404).json({ message: 'Donation not found' });
+      return;
+    }
+
+    // 2. LOGIC: If status changes to 'processing', create inventory items automatically
+    // This loop creates one inventory row for every computer in the donation quantity
+    if (status === 'processing' && donation.status !== 'processing') {
+      const inventoryItems = Array.from({ length: donation.quantity }).map(() => ({
+        donation_id: donationId,
+        // Default mixed to desktop if unspecified, or keep as mixed
+        computer_type: donation.computer_type === 'mixed' ? 'desktop' : donation.computer_type, 
+        status: 'received', // Initial status in inventory
+        condition_received: donation.condition_status === 'mixed' ? 'needs-repair' : donation.condition_status,
+        created_at: new Date(),
+        updated_at: new Date()
+      }));
+
+      const { error: inventoryError } = await supabaseAdmin
+        .from('computer_inventory')
+        .insert(inventoryItems);
+
+      if (inventoryError) {
+        console.error('Inventory creation failed:', inventoryError);
+        // We continue to update status, or you could return error here
+      }
+    }
+
+    // 3. Update the donation status
     const { data, error } = await supabaseAdmin
       .from('donations')
       .update({ status })
@@ -150,18 +186,12 @@ export const updateDonationStatus = async (req: Request, res: Response): Promise
       .select();
 
     if (error) {
-      console.error('[DEBUG] Update error:', error);
       res.status(500).json({ message: error.message });
       return;
     }
 
-    if (!data || data.length === 0) {
-      res.status(404).json({ message: 'Donation not found or permission denied' });
-      return;
-    }
-
     res.json({
-      message: 'Donation status updated successfully',
+      message: `Donation status updated to ${status}. Inventory updated.`,
       donation: data[0]
     });
   } catch (error) {
