@@ -1,7 +1,20 @@
-import { Request, Response } from 'express';
+ import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
-// FIX 1: Import supabaseAdmin to allow bypassing RLS for updates
+import nodemailer from 'nodemailer';
 import { supabase, supabaseAdmin } from '../config/supabase.js';
+
+// Configure Email Transporter
+// Ensure EMAIL_USER and EMAIL_PASS are set in your .env file
+const transporter = nodemailer.createTransport({
+  service: 'gmail', 
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// 1. Create a School Request (with Reason)
+// backend/src/controllers/school.controller.ts
 
 export const createSchoolRequest = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -11,11 +24,25 @@ export const createSchoolRequest = async (req: Request, res: Response): Promise<
       return;
     }
 
+    // --- FIX IS HERE ---
     const requestData = {
-      ...req.body,
       user_id: req.user?.id,
+      
+      // Map Frontend fields to Database columns
+      school_name: req.body.school_name,
+      contact_person: req.body.contact_person, // Fixes previous error
+      email: req.body.email,                   // Fixes previous error
+      phone: req.body.phone,                   // Fixes previous error
+      location: req.body.location,
+      computer_type: req.body.computer_type,
+      quantity: req.body.quantity,
+
+      // CRITICAL FIX: Map 'reason_for_request' (Frontend) to 'justification' (Database)
+      justification: req.body.reason_for_request, 
+      
       status: 'pending'
     };
+    // -------------------
 
     const { data, error } = await supabase
       .from('school_requests')
@@ -25,7 +52,7 @@ export const createSchoolRequest = async (req: Request, res: Response): Promise<
 
     if (error) {
       console.error('School request creation error:', error);
-      res.status(500).json({ message: 'Failed to create request' });
+      res.status(500).json({ message: 'Failed to create request: ' + error.message });
       return;
     }
 
@@ -39,6 +66,7 @@ export const createSchoolRequest = async (req: Request, res: Response): Promise<
   }
 };
 
+// 2. Get All School Requests (Admin)
 export const getSchoolRequests = async (req: Request, res: Response): Promise<void> => {
   try {
     const { status, page = 1, limit = 10 } = req.query;
@@ -76,6 +104,7 @@ export const getSchoolRequests = async (req: Request, res: Response): Promise<vo
   }
 };
 
+// 3. Get Single Request by ID
 export const getSchoolRequestById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -91,6 +120,7 @@ export const getSchoolRequestById = async (req: Request, res: Response): Promise
       return;
     }
 
+    // Access Control: Only Admin or the Owner can view
     if (req.user?.user_type !== 'admin' && data.user_id !== req.user?.id) {
       res.status(403).json({ message: 'Access denied' });
       return;
@@ -103,6 +133,7 @@ export const getSchoolRequestById = async (req: Request, res: Response): Promise
   }
 };
 
+// 4. Get User's Own Requests
 export const getUserSchoolRequests = async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
@@ -130,53 +161,93 @@ export const getUserSchoolRequests = async (req: Request, res: Response): Promis
   }
 };
 
-export const updateRequestStatus = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      res.status(400).json({ errors: errors.array() });
-      return;
+// 5. Update Request Status (Admin Action + Email)
+ export const updateRequestStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const { status, admin_comment } = req.body; // Capture optional comment
+        const requestId = parseInt(id, 10);
+
+        // 1. Fetch current request & user email (Required for sending email)
+        const { data: request, error: fetchError } = await supabaseAdmin
+            .from('school_requests')
+            .select('*, users(email, name)') // Join with users to get email
+            .eq('id', requestId)
+            .single();
+
+        if (fetchError || !request) {
+            res.status(404).json({ message: 'Request not found' });
+            return;
+        }
+
+        // 2. Update Status in Database
+        const { error: updateError } = await supabaseAdmin
+            .from('school_requests')
+            .update({ 
+                status: status,
+                // You might want to add a column for admin comments in your DB
+                // admin_comment: admin_comment 
+            })
+            .eq('id', requestId);
+
+        if (updateError) {
+            console.error('Update failed:', updateError);
+            res.status(500).json({ message: 'Failed to update status' });
+            return;
+        }
+
+        // 3. Send Email Notification
+        if (request.users && request.users.email) {
+            const emailSubject = 
+                status === 'approved' ? '🎉 Good News: Your Equipment Request is Approved!' :
+                status === 'rejected' ? 'Update on your Equipment Request' :
+                'Status Update: Equipment Request';
+
+            const emailBody = `
+                Dear ${request.users.name || 'Partner School'},
+
+                Your request for ${request.quantity} ${request.computer_type}(s) has been updated to: **${status.toUpperCase()}**.
+                
+                ${admin_comment ? `**Admin Note:** ${admin_comment}` : ''}
+
+                ${status === 'approved' ? 'Our team will contact you shortly regarding delivery/pickup arrangements.' : ''}
+                ${status === 'rejected' ? 'You may apply again in the future or contact us for more details.' : ''}
+
+                Best Regards,
+                Computer for Schools Kenya Team
+            `;
+
+            try {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: request.users.email,
+                    subject: emailSubject,
+                    text: emailBody // Plain text body
+                    // html: '<p>...</p>' // You can use HTML here for nicer emails
+                });
+                console.log(`Email sent to ${request.users.email}`);
+            } catch (emailErr) {
+                console.error('Failed to send email:', emailErr);
+                // We don't return an error to the frontend here, because the DB update succeeded.
+            }
+        }
+
+        res.json({ message: `Request updated to ${status}` });
+
+    } catch (error) {
+        console.error('Server error:', error);
+        res.status(500).json({ message: 'Server error' });
     }
-
-    const { id } = req.params;
-    const { status } = req.body;
-    const requestId = parseInt(id, 10);
-
-    // FIX 2: Use supabaseAdmin to bypass RLS and .select() to avoid crashes
-    const { data, error } = await supabaseAdmin
-      .from('school_requests')
-      .update({ status })
-      .eq('id', requestId)
-      .select();
-
-    if (error) {
-      console.error('Update request status error:', error);
-      res.status(500).json({ message: error.message });
-      return;
-    }
-
-    if (!data || data.length === 0) {
-      res.status(404).json({ message: 'School request not found or permission denied' });
-      return;
-    }
-
-    res.json({
-      message: 'Request status updated successfully',
-      request: data[0]
-    });
-  } catch (error) {
-    console.error('Update request status error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
 };
 
+// 6. Get Schools Directory (Optional, for filters)
 export const getSchools = async (req: Request, res: Response): Promise<void> => {
   try {
     const { location, status, page = 1, limit = 10 } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
 
     let query = supabase
-      .from('schools')
+      .from('schools') // Assuming 'schools' table or 'users' table with type='school'
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
@@ -185,6 +256,7 @@ export const getSchools = async (req: Request, res: Response): Promise<void> => 
       query = query.eq('location', location);
     }
 
+    // You might filter by status if you have verified/unverified schools
     if (status) {
       query = query.eq('status', status);
     }
@@ -211,6 +283,7 @@ export const getSchools = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
+// 7. Get School Details
 export const getSchoolById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -232,10 +305,10 @@ export const getSchoolById = async (req: Request, res: Response): Promise<void> 
     res.status(500).json({ message: 'Server error' });
   }
 }; 
- 
 
+// 8. Fulfill Request (Logic to move Inventory to School)
 export const fulfillSchoolRequest = async (req: Request, res: Response): Promise<void> => {
-  const { requestId, inventoryItemIds } = req.body; // IDs from computer_inventory table
+  const { requestId, inventoryItemIds } = req.body; // Expects an array of Inventory IDs
 
   try {
     // 1. Update inventory status and link to the request
@@ -243,9 +316,10 @@ export const fulfillSchoolRequest = async (req: Request, res: Response): Promise
       .from('computer_inventory')
       .update({ 
         status: 'delivered', 
-        assigned_school_id: requestId 
+        assigned_school_id: requestId,
+        updated_at: new Date()
       })
-      .in('id', inventoryItemIds);
+      .in('id', inventoryItemIds); // Updates multiple items at once
 
     if (invError) throw invError;
 
@@ -257,17 +331,17 @@ export const fulfillSchoolRequest = async (req: Request, res: Response): Promise
 
     if (reqError) throw reqError;
 
-    // 3. Update the total computers received for the school record
-    // Note: This assumes school_requests.school_name matches schools.name
-    const { data: requestData } = await supabase
+    // 3. Update the total computers received for the school record (Impact Tracking)
+    const { data: requestData } = await supabaseAdmin
       .from('school_requests')
       .select('school_name')
       .eq('id', requestId)
       .single();
 
     if (requestData) {
+      // Calls a Postgres function to safely increment the counter
       await supabaseAdmin.rpc('increment_school_computers', { 
-        s_name: requestData.school_name, 
+        school_name_input: requestData.school_name, 
         count: inventoryItemIds.length 
       });
     }

@@ -7,7 +7,7 @@ import donationRoutes from './routes/donation.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import schoolRoutes from './routes/school.routes.js';
 import statsRoutes from './routes/stats.routes.js';
-import inventoryRoutes from './routes/inventroy.routes.js';
+import inventoryRoutes from './routes/inventory.routes';
 import { errorHandler } from './middleware/errorHandler.js';
 
 

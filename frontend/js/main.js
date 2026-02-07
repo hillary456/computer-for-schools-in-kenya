@@ -16,7 +16,11 @@ function initializeApp() {
     setupMobileMenu();
     setupFormValidation();
     animateOnScroll();
-    switchTab('login');
+    // Initialize auth modal state
+    const authModal = document.getElementById('authModal');
+    if (authModal && authModal.style.display !== 'none') {
+        switchTab('login');
+    }
 }
 
 function checkSession() {
@@ -26,14 +30,28 @@ function checkSession() {
     if (storedUser && storedToken) {
         currentUser = JSON.parse(storedUser);
         authToken = storedToken;
+        // If user is logged in, show dashboard button or update UI if needed
+        const loginBtn = document.querySelector('.login-btn');
+        if (loginBtn) {
+            loginBtn.innerHTML = '<i class="fas fa-user"></i> Dashboard';
+            loginBtn.onclick = openDashboard;
+        }
     }
 }
 
 function getAuthHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
+    // 1. Always get the fresh token from storage
+    const token = localStorage.getItem('token') || authToken; 
+    
+    const headers = { 
+        'Content-Type': 'application/json' 
+    };
+
+    // 2. Only add header if token exists
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
     }
+    
     return headers;
 }
 
@@ -55,12 +73,13 @@ function setupEventListeners() {
     const requestForm = document.getElementById('requestForm');
     if (requestForm) requestForm.addEventListener('submit', handleRequestSubmit);
 
+    const fulfillmentForm = document.getElementById('fulfillmentForm');
+    if (fulfillmentForm) {
+        fulfillmentForm.addEventListener('submit', handleFulfillmentSubmit);
+    }
 
     document.querySelectorAll('.user-type-btn').forEach(btn => btn.addEventListener('click', handleUserTypeSelect));
     window.addEventListener('click', handleModalClick);
-
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) logoutBtn.addEventListener('click', logout);
 }
 
 function handleNavClick(e) {
@@ -123,10 +142,11 @@ function setupFormValidation() {
 
 function validateField(e) {
     const field = e.target;
+    // Don't validate hidden fields
+    if (field.offsetParent === null) return true;
+
     const value = field.value.trim();
     field.classList.remove('error');
-
-    if (field.offsetParent === null) return true;
 
     if (field.hasAttribute('required') && !value) {
         showFieldError(field, 'This field is required');
@@ -164,84 +184,6 @@ function clearFieldError(e) {
     if (errorMessage) errorMessage.remove();
 }
 
-async function handleDonationSubmit(e) {
-    e.preventDefault();
-    const formElement = e.target;
-    const formData = new FormData(formElement);
-    const donationData = Object.fromEntries(formData.entries());
-
-    if (!validateForm(formElement)) return;
-
-    if (currentUser && currentUser.user_id) donationData.user_id = currentUser.user_id;
-
-    const submitBtn = formElement.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
-    submitBtn.disabled = true;
-
-    try {
-        const response = await fetch(`${API_URL}/donations`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(donationData)
-        });
-
-        const result = await response.json();
-        if (response.ok) {
-            formElement.reset();
-            showNotification('Thank you for your generous donation!', 'success');
-
-            if (currentUser && currentUser.type === 'donor') {
-                await loadUserDashboardData();
-
-                if (formElement.id === 'dashboardDonationForm') {
-                    showDashboardSection('donations');
-                }
-            }
-        } else {
-            showNotification(result.message || 'Submission failed', 'error');
-        }
-    } catch (error) {
-        console.error(error);
-        showNotification('Connection error.', 'error');
-    } finally {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-    }
-}
-
-async function handleContactSubmit(e) {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const contactData = Object.fromEntries(formData.entries());
-    if (!validateForm(e.target)) return;
-
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-    submitBtn.disabled = true;
-    try {
-        const response = await fetch(`${API_URL}/contact`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(contactData)
-        });
-        const result = await response.json();
-        if (response.ok) {
-            e.target.reset();
-            showNotification('Message sent!', 'success');
-        } else {
-            showNotification(result.message || 'Failed to send', 'error');
-        }
-    } catch (error) {
-        console.error(error);
-        showNotification('Connection error.', 'error');
-    } finally {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-    }
-}
-
 function validateForm(form) {
     const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
     let isValid = true;
@@ -253,23 +195,19 @@ function validateForm(form) {
     return isValid;
 }
 
-function showNotification(message, type = 'info') {
-    const existingNotifications = document.querySelectorAll('.notification');
-    existingNotifications.forEach(notification => notification.remove());
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `<div class="notification-content"><i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i><span>${message}</span><button class="notification-close" onclick="this.parentElement.parentElement.remove()"><i class="fas fa-times"></i></button></div>`;
-    notification.style.cssText = `position: fixed; top: 100px; right: 20px; background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'}; color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 3000; max-width: 400px; animation: slideInRight 0.3s ease;`;
-    document.body.appendChild(notification);
-    setTimeout(() => { if (notification.parentNode) notification.remove(); }, 5000);
-}
+/* =========================================
+   AUTH LOGIC
+   ========================================= */
 
 function openAuthModal() {
-    const modal = document.getElementById('authModal');
-    modal.style.display = 'block';
-    document.body.style.overflow = 'hidden';
-    if (isLoginMode) switchTab('login');
-    else switchTab('signup');
+    if (currentUser) {
+        openDashboard();
+    } else {
+        const modal = document.getElementById('authModal');
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        switchTab('login');
+    }
 }
 
 function closeAuthModal() {
@@ -279,117 +217,65 @@ function closeAuthModal() {
     resetAuthForm();
 }
 
-// Open the modal and load approved school requests
-async function openFulfillmentModal(inventoryId) {
-    const modal = document.getElementById('fulfillmentModal');
-    const hiddenInput = document.getElementById('fulfillInventoryId');
-    const select = document.getElementById('schoolSelect');
-    
-    if (!modal || !hiddenInput || !select) return;
-
-    // Set the inventory ID we are giving out
-    hiddenInput.value = inventoryId;
-    modal.style.display = 'block';
-
-    // Fetch approved requests to populate the dropdown
-    try {
-        const response = await fetch(`${API_URL}/schools/requests?status=approved`, {
-            headers: getAuthHeaders()
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            const requests = data.requests || [];
-            
-            select.innerHTML = '<option value="">Select a school...</option>';
-            requests.forEach(req => {
-                select.innerHTML += `<option value="${req.id}">${req.school_name} - ${req.computer_type} (${req.quantity} needed)</option>`;
-            });
-        }
-    } catch (error) {
-        console.error('Error loading requests', error);
-        select.innerHTML = '<option>Error loading schools</option>';
-    }
-}
-
-function closeFulfillmentModal() {
-    const modal = document.getElementById('fulfillmentModal');
-    if (modal) modal.style.display = 'none';
-}
-
-// Handle the form submit to actually "Give Out" the computer
-async function handleFulfillmentSubmit(e) {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const data = Object.fromEntries(formData.entries());
-
-    try {
-        const response = await fetch(`${API_URL}/inventory/fulfill`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(data)
-        });
-
-        if (response.ok) {
-            showNotification('Computer assigned successfully!', 'success');
-            closeFulfillmentModal();
-            loadInventory(); // Refresh the inventory table
-            loadAdminDashboardData(); // Refresh the impact stats
-        } else {
-            const err = await response.json();
-            showNotification(err.message || 'Assignment failed', 'error');
-        }
-    } catch (error) {
-        console.error(error);
-        showNotification('Connection error', 'error');
-    }
-}
-
-// Add event listener in setupEventListeners()
-// document.getElementById('fulfillmentForm').addEventListener('submit', handleFulfillmentSubmit);
-
 function switchTab(mode) {
     isLoginMode = mode === 'login';
+    
+    // 1. Update Tab UI
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     const buttons = document.querySelectorAll('.tab-btn');
     if (isLoginMode && buttons.length > 0) buttons[0].classList.add('active');
     else if (buttons.length > 1) buttons[1].classList.add('active');
 
+    // 2. Titles
     document.getElementById('modalTitle').textContent = isLoginMode ? 'Welcome Back' : 'Join CFS Kenya';
     document.getElementById('authSubmitBtn').textContent = isLoginMode ? 'Sign In' : 'Create Account';
 
-    const fields = ['nameField', 'confirmPasswordField', 'organizationField', 'locationField', 'userTypeSelection'];
+    // 3. Toggle visibility of signup-only fields
+    const fields = ['nameField', 'confirmPasswordField', 'organizationField', 'locationField', 'userTypeSelection', 'schoolFields'];
     fields.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = isLoginMode ? 'none' : 'block';
     });
 
+    // 4. Forgot Password
     const forgotPassField = document.getElementById('forgotPassword');
     if (forgotPassField) forgotPassField.style.display = isLoginMode ? 'block' : 'none';
 
+    // 5. Handle Required Attributes
     const nameInput = document.getElementById('authName');
     const confirmPassInput = document.getElementById('confirmPassword');
     const locationInput = document.getElementById('location');
     const orgInput = document.getElementById('authOrganization');
 
     if (isLoginMode) {
+        // Remove requirements for login
         if (nameInput) nameInput.removeAttribute('required');
         if (confirmPassInput) confirmPassInput.removeAttribute('required');
         if (locationInput) locationInput.removeAttribute('required');
         if (orgInput) orgInput.removeAttribute('required');
+        
+        const schoolFields = document.getElementById('schoolFields');
+        if (schoolFields) {
+            schoolFields.querySelectorAll('input, select').forEach(i => i.removeAttribute('required'));
+        }
     } else {
+        // Set requirements for Signup
         if (nameInput) nameInput.setAttribute('required', 'true');
         if (confirmPassInput) confirmPassInput.setAttribute('required', 'true');
         if (locationInput) locationInput.setAttribute('required', 'true');
 
+        // Re-apply User Type logic to ensure correct labels/requirements
         const activeTypeBtn = document.querySelector('.user-type-btn.active');
-        if (activeTypeBtn && (activeTypeBtn.dataset.type === 'school' || activeTypeBtn.dataset.type === 'admin')) {
-            if (orgInput) orgInput.setAttribute('required', 'true');
+        if (activeTypeBtn) {
+            handleUserTypeSelect({ currentTarget: activeTypeBtn });
         } else {
-            if (orgInput) orgInput.removeAttribute('required');
+            // Default to donor if none selected
+            const donorBtn = document.querySelector('.user-type-btn[data-type="donor"]');
+            if (donorBtn) handleUserTypeSelect({ currentTarget: donorBtn });
         }
     }
 
+    // 6. Admin Secret
     const adminSecretField = document.getElementById('adminSecretField');
     if (adminSecretField) {
         adminSecretField.style.display = (!isLoginMode && selectedUserType === 'admin') ? 'block' : 'none';
@@ -403,32 +289,70 @@ function switchTab(mode) {
 
 function handleUserTypeSelect(e) {
     document.querySelectorAll('.user-type-btn').forEach(btn => btn.classList.remove('active'));
-    e.currentTarget.classList.add('active');
-    selectedUserType = e.currentTarget.dataset.type;
+    const btn = e.currentTarget;
+    btn.classList.add('active');
+    selectedUserType = btn.dataset.type;
 
+    const nameLabel = document.querySelector('label[for="authName"]');
+    const nameInput = document.getElementById('authName');
+    const orgField = document.getElementById('organizationField');
+    const orgInput = document.getElementById('authOrganization');
     const adminSecretField = document.getElementById('adminSecretField');
+    const schoolFields = document.getElementById('schoolFields');
+
+    // Admin Secret Logic
     if (adminSecretField) {
-        adminSecretField.style.display = selectedUserType === 'admin' ? 'block' : 'none';
+        adminSecretField.style.display = selectedUserType === 'admin' && !isLoginMode ? 'block' : 'none';
+        const secretInput = adminSecretField.querySelector('input');
+        if (selectedUserType === 'admin' && !isLoginMode) secretInput.setAttribute('required', 'true');
+        else secretInput.removeAttribute('required');
     }
 
-    const orgField = document.getElementById('organizationField');
-    const orgLabel = orgField.querySelector('label');
-    const orgInput = document.getElementById('authOrganization');
-
-    if (!orgLabel || !orgInput) return;
-
+    // School vs Donor/Admin Logic
     if (selectedUserType === 'school') {
-        orgLabel.textContent = 'School Name *';
-        orgInput.placeholder = 'Enter school name';
-        orgInput.setAttribute('required', 'true');
-    } else if (selectedUserType === 'donor') {
-        orgLabel.textContent = 'Organization (Optional)';
-        orgInput.placeholder = 'Company or organization';
-        orgInput.removeAttribute('required');
+        if (nameLabel) nameLabel.textContent = 'School Name *';
+        if (nameInput) nameInput.placeholder = 'Enter official school name';
+        
+        // Hide Organization (Name = School Name)
+        if (orgField) orgField.style.display = 'none';
+        if (orgInput) orgInput.removeAttribute('required');
+
+        // Show School Fields
+        if (schoolFields && !isLoginMode) {
+            schoolFields.style.display = 'block';
+            schoolFields.querySelectorAll('input, select, textarea').forEach(input => {
+                if(input.name !== 'description') input.setAttribute('required', 'true');
+            });
+        }
     } else {
-        orgLabel.textContent = 'Organization *';
-        orgInput.placeholder = 'Organization name';
-        orgInput.setAttribute('required', 'true');
+        if (nameLabel) nameLabel.textContent = 'Full Name *';
+        if (nameInput) nameInput.placeholder = 'Enter your full name';
+
+        if (schoolFields) {
+            schoolFields.style.display = 'none';
+            schoolFields.querySelectorAll('input, select, textarea').forEach(input => {
+                input.removeAttribute('required');
+            });
+        }
+
+        if (orgField && !isLoginMode) {
+            orgField.style.display = 'block';
+            const orgLabel = orgField.querySelector('label');
+            
+            if (selectedUserType === 'donor') {
+                if (orgLabel) orgLabel.textContent = 'Organization (Optional)';
+                if (orgInput) {
+                    orgInput.placeholder = 'Company or organization';
+                    orgInput.removeAttribute('required');
+                }
+            } else if (selectedUserType === 'admin') {
+                if (orgLabel) orgLabel.textContent = 'Organization *';
+                if (orgInput) {
+                    orgInput.placeholder = 'Organization name';
+                    orgInput.setAttribute('required', 'true');
+                }
+            }
+        }
     }
 }
 
@@ -452,7 +376,6 @@ async function handleAuthSubmit(e) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
     submitBtn.disabled = true;
 
-
     const endpoint = isLoginMode ? '/auth/login' : '/auth/register';
 
     try {
@@ -462,18 +385,14 @@ async function handleAuthSubmit(e) {
             body: JSON.stringify(authData)
         });
 
-        let result;
-        try {
-            result = await response.json();
-        } catch (jsonError) {
-            throw new Error("Server returned invalid JSON.");
-        }
+        const result = await response.json();
 
         if (response.ok) {
             if (isLoginMode) {
+                // Store token and user
                 authToken = result.token;
-                sessionStorage.setItem('authToken', authToken);
-
+                localStorage.setItem('token', authToken); // Use LocalStorage for token persistence
+                
                 currentUser = {
                     user_id: result.user.id,
                     name: result.user.name,
@@ -483,10 +402,19 @@ async function handleAuthSubmit(e) {
                     location: result.user.location || ''
                 };
                 sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                sessionStorage.setItem('authToken', authToken);
 
                 closeAuthModal();
-                openDashboard();
                 showNotification(`Welcome back, ${currentUser.name}!`, 'success');
+                
+                // Update Login Button to Dashboard Button
+                const loginBtn = document.querySelector('.login-btn');
+                if (loginBtn) {
+                    loginBtn.innerHTML = '<i class="fas fa-user"></i> Dashboard';
+                    loginBtn.onclick = openDashboard;
+                }
+                
+                openDashboard();
             } else {
                 showNotification('Account created successfully! Please login.', 'success');
                 switchTab('login');
@@ -507,10 +435,38 @@ function resetAuthForm() {
     const form = document.getElementById('authForm');
     if (form) {
         form.reset();
-        document.querySelectorAll('.error-message').forEach(error => error.remove());
-        document.querySelectorAll('.error').forEach(field => field.classList.remove('error'));
+        clearAllErrors();
     }
 }
+
+function clearAllErrors() {
+    document.querySelectorAll('.error-message').forEach(error => error.remove());
+    document.querySelectorAll('.error').forEach(field => field.classList.remove('error'));
+}
+
+function logout() {
+    currentUser = null;
+    authToken = null;
+    localStorage.removeItem('token');
+    sessionStorage.removeItem('currentUser');
+    sessionStorage.removeItem('authToken');
+    
+    closeDashboard();
+    showNotification('Logged out.', 'success');
+    
+    // Reset Login Button
+    const loginBtn = document.querySelector('.login-btn');
+    if (loginBtn) {
+        loginBtn.innerHTML = '<i class="fas fa-user"></i> Login';
+        loginBtn.onclick = openAuthModal;
+    }
+    
+    window.location.reload();
+}
+
+/* =========================================
+   DASHBOARD LOGIC
+   ========================================= */
 
 function openDashboard() {
     const modal = document.getElementById('dashboardModal');
@@ -532,9 +488,8 @@ function openDashboard() {
         if (schoolNav) schoolNav.style.display = 'none';
         if (adminNav) adminNav.style.display = 'none';
 
-
-        const views = ['donorDashboard', 'schoolDashboard', 'adminDashboard'];
-        views.forEach(id => {
+        // Hide all specific dashboard divs
+        ['donorDashboard', 'schoolDashboard', 'adminDashboard'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
@@ -554,6 +509,7 @@ function openDashboard() {
             loadAdminDashboardData();
         }
         else {
+            // Default Donor
             if (donorNav) donorNav.style.display = 'block';
             const donorDash = document.getElementById('donorDashboard');
             if (donorDash) donorDash.style.display = 'block';
@@ -561,18 +517,6 @@ function openDashboard() {
             loadUserDashboardData();
             prefillDashboardDonationForm();
         }
-    }
-}
-
-function prefillDashboardDonationForm() {
-    if (!currentUser) return;
-
-    if (document.getElementById('dashDonorName')) document.getElementById('dashDonorName').value = currentUser.name || '';
-    if (document.getElementById('dashEmail')) document.getElementById('dashEmail').value = currentUser.email || '';
-    if (document.getElementById('dashOrganization')) document.getElementById('dashOrganization').value = currentUser.organization || '';
-
-    if (document.getElementById('dashAddress') && currentUser.location) {
-        document.getElementById('dashAddress').value = currentUser.location;
     }
 }
 
@@ -605,241 +549,134 @@ function updateSettingsForm() {
     }
 }
 
+/* =========================================
+   DONATION LOGIC
+   ========================================= */
 
-function logout() {
-    currentUser = null;
-    authToken = null;
-    sessionStorage.removeItem('currentUser');
-    sessionStorage.removeItem('authToken');
-    closeDashboard();
-    showNotification('Logged out.', 'success');
-    window.location.reload();
-}
+async function handleDonationSubmit(e) {
+    e.preventDefault();
+    const formElement = e.target;
+    const formData = new FormData(formElement);
+    const donationData = Object.fromEntries(formData.entries());
 
-function handleModalClick(e) {
-    if (e.target === document.getElementById('authModal')) closeAuthModal();
-    if (e.target === document.getElementById('dashboardModal')) closeDashboard();
-    if (e.target === document.getElementById('requestModal')) closeRequestModal();
-}
+    if (!validateForm(formElement)) return;
+    if (currentUser && currentUser.user_id) donationData.user_id = currentUser.user_id;
 
-function animateOnScroll() {
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('fade-in-up'); });
-    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
-    document.querySelectorAll('.value-card, .service-card, .stat-card, .story-card, .region-card').forEach(el => observer.observe(el));
-}
-
-window.addEventListener('scroll', () => {
-    const header = document.querySelector('.header');
-    if (window.scrollY > 100) {
-        header.style.background = 'rgba(255, 255, 255, 0.98)';
-        header.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.15)';
-    } else {
-        header.style.background = 'rgba(255, 255, 255, 0.95)';
-        header.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.1)';
-    }
-});
-
-const style = document.createElement('style');
-style.textContent = `@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .notification-content { display: flex; align-items: center; gap: 12px; } .notification-close { background: none; border: none; color: inherit; cursor: pointer; padding: 4px; border-radius: 4px; transition: background-color 0.2s; } .notification-close:hover { background-color: rgba(255, 255, 255, 0.2); } .error { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important; } .hamburger.active span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); } .hamburger.active span:nth-child(2) { opacity: 0; } .hamburger.active span:nth-child(3) { transform: rotate(-45deg) translate(7px, -6px); }`;
-document.head.appendChild(style);
-
-
-
-async function loadUserDashboardData() {
-    if (!currentUser || !currentUser.user_id) return;
+    const submitBtn = formElement.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+    submitBtn.disabled = true;
 
     try {
-        const response = await fetch(`${API_URL}/donations/user/${currentUser.user_id}`, {
-            headers: getAuthHeaders()
+        const response = await fetch(`${API_URL}/donations`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(donationData)
         });
 
+        const result = await response.json();
         if (response.ok) {
-            const data = await response.json();
-            const donations = data.donations || [];
-
-            updateDashboardStats(donations);
-            renderDonationsTable(donations);
-            renderRecentActivity(donations);
+            formElement.reset();
+            showNotification('Thank you for your generous donation!', 'success');
+            if (currentUser && currentUser.type === 'donor') {
+                await loadUserDashboardData();
+                if (formElement.id === 'dashboardDonationForm') {
+                    showDashboardSection('donations');
+                }
+            }
         } else {
-            console.error('Failed to fetch user donations');
+            showNotification(result.message || 'Submission failed', 'error');
         }
     } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        console.error(error);
+        showNotification('Connection error.', 'error');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
     }
 }
 
-function updateDashboardStats(donations) {
-    console.log("Dashboard Data Received:", donations);
-
-    const totalDonationsEl = document.getElementById('dashTotalDonations');
-    if (totalDonationsEl) {
-        totalDonationsEl.textContent = donations.length;
-    }
-
-    const schoolsHelpedEl = document.getElementById('dashSchoolsHelped');
-    if (schoolsHelpedEl) {
-        const helpedCount = donations.filter(d =>
-            ['approved', 'delivered', 'processing'].includes(d.status)
-        ).length;
-        schoolsHelpedEl.textContent = helpedCount;
-    }
-
-    const impactScoreEl = document.getElementById('dashImpactScore');
-    if (impactScoreEl) {
-        const score = donations.reduce((sum, d) => {
-            const qty = parseInt(d.quantity) || 0;
-            let points = qty * 10;
-
-            if (d.status === 'approved') points += 50;
-            if (d.status === 'delivered') points += 100;
-
-            return sum + points;
-        }, 0);
-
-        impactScoreEl.textContent = score.toLocaleString();
+function prefillDashboardDonationForm() {
+    if (!currentUser) return;
+    if (document.getElementById('dashDonorName')) document.getElementById('dashDonorName').value = currentUser.name || '';
+    if (document.getElementById('dashEmail')) document.getElementById('dashEmail').value = currentUser.email || '';
+    if (document.getElementById('dashOrganization')) document.getElementById('dashOrganization').value = currentUser.organization || '';
+    if (document.getElementById('dashAddress') && currentUser.location) {
+        document.getElementById('dashAddress').value = currentUser.location;
     }
 }
 
-function renderDonationsTable(donations) {
-    const tbody = document.getElementById('donationTableBody');
-    if (!tbody) return;
+/* =========================================
+   SCHOOL REQUEST LOGIC
+   ========================================= */
 
-    tbody.innerHTML = '';
+async function handleRequestSubmit(e) {
+    e.preventDefault();
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Submitting...';
+    submitBtn.disabled = true;
 
-    if (donations.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 1rem;">No donations found yet.</td></tr>';
-        return;
+    const formData = new FormData(e.target);
+    const requestData = Object.fromEntries(formData.entries());
+
+    if (requestData.quantity) {
+        requestData.quantity = parseInt(requestData.quantity, 10);
     }
-
-    donations.forEach(donation => {
-        const date = new Date(donation.created_at).toLocaleDateString();
-        const statusClass = getStatusClass(donation.status);
-        const statusLabel = donation.status.charAt(0).toUpperCase() + donation.status.slice(1);
-
-        const row = `
-            <tr>
-                <td>${date}</td>
-                <td style="text-transform: capitalize;">${donation.computer_type}</td>
-                <td>${donation.quantity}</td>
-                <td><span class="status ${statusClass}">${statusLabel}</span></td>
-            </tr>
-        `;
-        tbody.innerHTML += row;
-    });
-}
-
-function renderRecentActivity(donations) {
-    const activityList = document.getElementById('dashActivityList');
-    if (!activityList) return;
-
-    activityList.innerHTML = '';
-    const recentItems = donations.slice(0, 3);
-
-    if (recentItems.length === 0) {
-        activityList.innerHTML = '<p style="color: #6b7280; font-size: 0.9rem;">No recent activity.</p>';
-        return;
-    }
-
-    recentItems.forEach(donation => {
-        const date = new Date(donation.created_at).toLocaleDateString();
-
-        let description = '';
-        let icon = 'fa-clock';
-        let iconColor = '#fef3c7';
-        let iconTextColor = '#92400e';
-
-        if (donation.status === 'pending') {
-            description = `Submission for ${donation.quantity} ${donation.computer_type}(s) is pending approval.`;
-        } else if (donation.status === 'approved') {
-            icon = 'fa-check';
-            iconColor = '#dcfce7';
-            iconTextColor = '#166534';
-            description = `Donation of ${donation.quantity} ${donation.computer_type}(s) has been approved.`;
-        } else if (donation.status === 'delivered') {
-            icon = 'fa-truck';
-            iconColor = '#dbeafe';
-            iconTextColor = '#1e40af';
-            description = `Donation delivered successfully!`;
-        } else {
-            description = `Status update: ${donation.status}`;
-        }
-
-        const item = `
-            <div class="activity-item">
-                <div class="activity-icon" style="background: ${iconColor};">
-                    <i class="fas ${icon}" style="color: ${iconTextColor};"></i>
-                </div>
-                <div class="activity-content">
-                    <div class="activity-title">Donation ${donation.status}</div>
-                    <div class="activity-description">${description}</div>
-                    <div class="activity-date">${date}</div>
-                </div>
-            </div>
-        `;
-        activityList.innerHTML += item;
-    });
-}
-
-
-async function loadSchoolDashboardData() {
-    if (!currentUser || !currentUser.user_id) return;
 
     try {
-        const response = await fetch(`${API_URL}/schools/requests/user/${currentUser.user_id}`, {
-            headers: getAuthHeaders()
+        const response = await fetch(`${API_URL}/schools/requests`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(requestData)
         });
 
+        const data = await response.json();
+
         if (response.ok) {
-            const data = await response.json();
-            renderSchoolRequests(data.requests || []);
+            showNotification('Request submitted successfully!', 'success');
+            closeRequestModal();
+            e.target.reset();
+            const schoolDash = document.getElementById('schoolDashboard');
+            if (schoolDash && schoolDash.style.display !== 'none') {
+                loadSchoolDashboardData();
+            }
         } else {
-            console.error('Failed to fetch school requests');
+            if (data.errors && Array.isArray(data.errors)) {
+                const errorMsg = data.errors.map(err => `${err.path || err.param}: ${err.msg}`).join(', ');
+                showNotification(`Validation Error: ${errorMsg}`, 'error');
+                console.error('Server Validation Details:', data.errors);
+            } else {
+                showNotification(data.message || 'Failed to submit request', 'error');
+            }
         }
     } catch (error) {
-        console.error('Error loading school data:', error);
+        console.error('Request error:', error);
+        showNotification('Server connection failed.', 'error');
+    } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
     }
-}
-
-function renderSchoolRequests(requests) {
-    const tbody = document.getElementById('schoolRequestsBody');
-    if (!tbody) return;
-
-    tbody.innerHTML = '';
-
-    if (requests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 1rem;">No requests made yet.</td></tr>';
-        return;
-    }
-
-    requests.forEach(req => {
-        const date = new Date(req.created_at).toLocaleDateString();
-        const statusClass = getStatusClass(req.status);
-        const statusLabel = req.status.charAt(0).toUpperCase() + req.status.slice(1);
-
-        const row = `
-            <tr>
-                <td>${date}</td>
-                <td style="text-transform: capitalize;">${req.computer_type}</td>
-                <td>${req.quantity}</td>
-                <td><span class="status ${statusClass}">${statusLabel}</span></td>
-            </tr>
-        `;
-        tbody.innerHTML += row;
-    });
 }
 
 function openRequestModal() {
     const modal = document.getElementById('requestModal');
     if (modal) {
         modal.style.display = 'block';
+        // Prefill if possible
         if (currentUser) {
             const form = document.getElementById('requestForm');
             if (form) {
-                if (form.querySelector('[name="school_name"]')) form.querySelector('[name="school_name"]').value = currentUser.organization || '';
-                if (form.querySelector('[name="email"]')) form.querySelector('[name="email"]').value = currentUser.email || '';
-                if (form.querySelector('[name="contact_person"]')) form.querySelector('[name="contact_person"]').value = currentUser.name || '';
-                if (form.querySelector('[name="location"]')) form.querySelector('[name="location"]').value = currentUser.location || '';
+                const schoolName = form.querySelector('[name="school_name"]');
+                const email = document.getElementById('req_email');
+                const contact = form.querySelector('[name="contact_person"]');
+                const loc = form.querySelector('[name="location"]');
+
+                if (schoolName) schoolName.value = currentUser.organization || currentUser.name || '';
+                if (email) email.value = currentUser.email || '';
+                if (contact) contact.value = currentUser.name || ''; // Often same as user
+                if (loc) loc.value = currentUser.location || '';
             }
         }
     }
@@ -850,148 +687,177 @@ function closeRequestModal() {
     if (modal) modal.style.display = 'none';
 }
 
-async function handleRequestSubmit(e) {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const requestData = Object.fromEntries(formData.entries());
-
-
-    if (currentUser && currentUser.user_id) {
-        requestData.user_id = currentUser.user_id;
-    } else {
-        showNotification('Session expired. Please login again.', 'error');
-        return;
-    }
-
-    if (requestData.quantity) {
-        requestData.quantity = parseInt(requestData.quantity, 10);
-    }
-
-
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
-    submitBtn.disabled = true;
-
+async function loadSchoolDashboardData() {
+    if (!currentUser || !currentUser.user_id) return;
     try {
-        const response = await fetch(`${API_URL}/schools/requests`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(requestData)
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-            e.target.reset();
-            closeRequestModal();
-            showNotification('Request submitted successfully!', 'success');
-            loadSchoolDashboardData();
-        } else {
-            showNotification(result.message || 'Submission failed', 'error');
-            console.error('Server Error Detail:', result);
-        }
-    } catch (error) {
-        console.error(error);
-        showNotification('Connection error', 'error');
-    } finally {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-    }
-}
-
-async function loadAdminDashboardData() {
-    try {
-        const response = await fetch(`${API_URL}/stats/dashboard`, {
+        const response = await fetch(`${API_URL}/schools/requests/user/${currentUser.user_id}`, {
             headers: getAuthHeaders()
         });
-
         if (response.ok) {
             const data = await response.json();
-            const pendingDonationsEl = document.getElementById('adminPendingDonations');
-            const pendingRequestsEl = document.getElementById('adminPendingRequests');
-
-            if (pendingDonationsEl) pendingDonationsEl.textContent = data.statistics.pending.donations || 0;
-            if (pendingRequestsEl) pendingRequestsEl.textContent = data.statistics.pending.requests || 0;
-        } else {
-            console.error('Failed to fetch admin stats');
+            renderSchoolRequests(data.requests || []);
         }
     } catch (error) {
-        console.error('Error loading admin stats:', error);
+        console.error('Error loading school data:', error);
     }
-
-    try {
-        const reportResponse = await fetch(`${API_URL}/stats/impact-report`, {
-            headers: getAuthHeaders()
-        });
-
-        if (reportResponse.ok) {
-            const report = await reportResponse.json();
-
-            const totalDonatedEl = document.getElementById('totalComputersDonated');
-            const studentsReachedEl = document.getElementById('studentsReached');
-            const regionsCoveredEl = document.getElementById('regionsCovered');
-
-            if (totalDonatedEl) totalDonatedEl.textContent = report.total_computers_donated || 0;
-            if (studentsReachedEl) studentsReachedEl.textContent = report.students_reached || 0;
-            if (regionsCoveredEl) regionsCoveredEl.textContent = report.regions_covered || 0;
-        }
-    } catch (error) {
-        console.error('Error loading impact report:', error);
-    }
-
-    loadAdminDonations();
-    loadAdminRequests();
-    if (typeof loadInventory === 'function') loadInventory();
 }
 
-async function loadInventory() {
+function renderSchoolRequests(requests) {
+    const tbody = document.getElementById('schoolRequestsBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (requests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No requests yet.</td></tr>';
+        return;
+    }
+    requests.forEach(req => {
+        const date = new Date(req.created_at).toLocaleDateString();
+        const statusClass = getStatusClass(req.status);
+        const statusLabel = req.status.charAt(0).toUpperCase() + req.status.slice(1);
+        tbody.innerHTML += `
+            <tr>
+                <td>${date}</td>
+                <td style="text-transform: capitalize;">${req.computer_type}</td>
+                <td>${req.quantity}</td>
+                <td><span class="status ${statusClass}">${statusLabel}</span></td>
+            </tr>
+        `;
+    });
+}
+
+/* =========================================
+   ADMIN LOGIC
+   ========================================= */
+
+async function loadAdminDashboardData() {
+    // 1. Stats
+    try {
+        const response = await fetch(`${API_URL}/stats/dashboard`, { headers: getAuthHeaders() });
+        if (response.ok) {
+            const data = await response.json();
+            const pendDon = document.getElementById('adminPendingDonations');
+            const pendReq = document.getElementById('adminPendingRequests');
+            if (pendDon) pendDon.textContent = data.statistics.pending.donations || 0;
+            if (pendReq) pendReq.textContent = data.statistics.pending.requests || 0;
+        }
+    } catch (error) { console.error('Admin stats error:', error); }
+
+    // 2. Impact Report
+    try {
+        const resp = await fetch(`${API_URL}/stats/impact-report`, { headers: getAuthHeaders() });
+        if (resp.ok) {
+            const report = await resp.json();
+            const totDon = document.getElementById('totalComputersDonated');
+            const stuReach = document.getElementById('studentsReached');
+            if (totDon) totDon.textContent = report.total_computers_donated || 0;
+            if (stuReach) stuReach.textContent = report.students_reached || 0;
+        }
+    } catch (error) { console.error('Impact report error:', error); }
+
+    // 3. Lists
+    loadAdminDonations();
+    loadAdminRequests();
+    loadInventory();
+    loadBeneficiaries();
+}
+
+async function loadBeneficiaries() {
+    const container = document.getElementById('beneficiariesList');
+    if (!container) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/stats/beneficiaries`, { headers: getAuthHeaders() });
+        if(response.ok) {
+            const beneficiaries = await response.json();
+            let html = '<div class="timeline">';
+            if (beneficiaries.length === 0) html += '<p style="text-align:center;">No beneficiaries yet.</p>';
+            
+            beneficiaries.forEach(b => {
+                const date = new Date(b.date_received).toLocaleDateString();
+                const time = new Date(b.date_received).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                
+                html += `
+                    <div class="timeline-item">
+                        <div class="time-marker">${date}<br><small>${time}</small></div>
+                        <div class="content">
+                            <h4>${b.school_name} <span class="badge success">Received</span></h4>
+                            <p><strong>Received:</strong> ${b.quantity} ${b.computer_type}(s)</p>
+                            <p><strong>Reason:</strong> "<em>${b.reason_for_request}</em>"</p>
+                            <p><small><i class="fas fa-map-marker-alt"></i> ${b.location}</small></p>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+    } catch(err) { console.error('Beneficiaries error', err); }
+}
+
+async function loadInventory(filterStatus = 'received') {
     const tbody = document.getElementById('adminInventoryBody');
     if (!tbody) return;
 
     try {
-        const response = await fetch(`${API_URL}/inventory`, {
+        const response = await fetch(`${API_URL}/inventory?status=${filterStatus}`, {
             headers: getAuthHeaders()
         });
-
         if (response.ok) {
             const inventory = await response.json();
             tbody.innerHTML = '';
-
-            if (inventory.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No inventory in stock.</td></tr>';
-                return;
+            if(inventory.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">No inventory items found.</td></tr>';
+                 return;
             }
 
             inventory.forEach(item => {
-                const row = `
+                const actionHtml = filterStatus === 'received' 
+                    ? `<button class="btn-icon" onclick="openRefurbishModal('${item.id}', '${item.computer_type}')" title="Refurbish"><i class="fas fa-tools"></i></button>`
+                    : (filterStatus === 'ready' ? `<button onclick="openFulfillmentModal('${item.id}')" class="btn-sm btn-primary">Fulfill</button>` : '-');
+
+                tbody.innerHTML += `
                     <tr>
-                        <td>${item.serial_number || 'N/A'}</td>
-                        <td style="text-transform: capitalize;">${item.computer_type}</td>
-                        <td style="text-transform: capitalize;">${item.condition_received}</td>
+                        <td>${item.serial_number}</td>
+                        <td>${item.computer_type}</td>
+                        <td>${item.condition_received}</td>
                         <td><span class="status ${getStatusClass(item.status)}">${item.status}</span></td>
-                        <td>
-                            ${item.status === 'ready' ?
-                        `<button class="btn-icon" onclick="openFulfillmentModal('${item.id}')" title="Assign to School">
-                                    <i class="fas fa-shipping-fast"></i>
-                                </button>` : 'Assigned'}
-                        </td>
-                    </tr>
-                `;
-                tbody.innerHTML += row;
+                        <td>${actionHtml}</td>
+                    </tr>`;
             });
         }
-    } catch (error) {
-        console.error('Error loading inventory:', error);
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: red;">Failed to load inventory.</td></tr>';
-    }
+    } catch (error) { console.error('Inventory load error:', error); }
+}
+
+async function openRefurbishModal(inventoryId, currentType) {
+    const newType = prompt("Confirm Equipment Type (desktop, laptop, tablet):", currentType);
+    if (!['desktop', 'laptop', 'tablet'].includes(newType)) return alert("Invalid type");
+
+    const newCondition = prompt("Set Condition (excellent, good, fair):", "good");
+    if(!newCondition) return;
+
+    try {
+        const response = await fetch(`${API_URL}/inventory/${inventoryId}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                computer_type: newType,
+                status: 'ready',
+                condition_after_refurbishment: newCondition
+            })
+        });
+
+        if (response.ok) {
+            showNotification("Item refurbished and ready for stock.", "success");
+            loadInventory('received');
+        } else {
+            showNotification("Failed to update item.", "error");
+        }
+    } catch(err) { console.error(err); }
 }
 
 async function loadAdminDonations() {
     try {
-        const response = await fetch(`${API_URL}/donations`, {
-            headers: getAuthHeaders()
-        });
+        const response = await fetch(`${API_URL}/donations`, { headers: getAuthHeaders() });
         if (response.ok) {
             const data = await response.json();
             renderAdminDonationsTable(data.donations || []);
@@ -1008,19 +874,14 @@ function renderAdminDonationsTable(donations) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No donations found.</td></tr>';
         return;
     }
-
     donations.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     donations.forEach(donation => {
         const date = new Date(donation.created_at).toLocaleDateString();
-
         const options = ['pending', 'approved', 'processing', 'delivered', 'rejected', 'collected'];
-
-        let selectHtml = `<select onchange="updateDonationStatus('${donation.id}', this.value)" class="status-select" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc;">`;
+        let selectHtml = `<select onchange="updateDonationStatus('${donation.id}', this.value)" class="status-select">`;
         options.forEach(opt => {
-            const isSelected = donation.status === opt ? 'selected' : '';
-            const label = opt.charAt(0).toUpperCase() + opt.slice(1);
-            selectHtml += `<option value="${opt}" ${isSelected}>${label}</option>`;
+            selectHtml += `<option value="${opt}" ${donation.status === opt ? 'selected' : ''}>${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`;
         });
         selectHtml += `</select>`;
 
@@ -1031,50 +892,41 @@ function renderAdminDonationsTable(donations) {
                 <td style="text-transform: capitalize;">${donation.computer_type}</td>
                 <td>${donation.quantity}</td>
                 <td><span class="status ${getStatusClass(donation.status)}">${donation.status}</span></td>
-                <td>
-                    ${selectHtml}
-                </td>
-            </tr>
-        `;
+                <td>${selectHtml}</td>
+            </tr>`;
     });
 }
 
 async function updateDonationStatus(id, status) {
-    if (!confirm(`Are you sure you want to change status to ${status}?`)) {
-        loadAdminDashboardData();
+    if (!confirm(`Change status to ${status}?`)) {
+        loadAdminDashboardData(); // Revert UI
         return;
     }
-
     try {
         const response = await fetch(`${API_URL}/donations/${id}/status`, {
             method: 'PATCH',
             headers: getAuthHeaders(),
             body: JSON.stringify({ status })
         });
-
         if (response.ok) {
-            showNotification(`Donation marked as ${status}`, 'success');
+            showNotification(`Donation updated to ${status}`, 'success');
             loadAdminDashboardData();
         } else {
-            showNotification('Failed to update status', 'error');
+            showNotification('Update failed', 'error');
         }
-    } catch (error) {
-        console.error(error);
-        showNotification('Connection error', 'error');
-    }
+    } catch (error) { console.error(error); }
 }
 
 async function loadAdminRequests() {
     try {
-        const response = await fetch(`${API_URL}/schools/requests`, {
-            headers: getAuthHeaders()
-        });
+        const response = await fetch(`${API_URL}/schools/requests`, { headers: getAuthHeaders() });
         if (response.ok) {
             const data = await response.json();
             renderAdminRequestsTable(data.requests || []);
         }
     } catch (error) { console.error('Admin requests error:', error); }
 }
+ 
 
 function renderAdminRequestsTable(requests) {
     const tbody = document.getElementById('adminRequestsBody');
@@ -1082,58 +934,150 @@ function renderAdminRequestsTable(requests) {
     tbody.innerHTML = '';
 
     if (requests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No requests found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No requests found.</td></tr>';
         return;
     }
 
     requests.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+    // Update the Table Header in your HTML first! (See note below)
+    // Or we can just render the rows assuming you update the HTML manually
+    
     requests.forEach(req => {
         const date = new Date(req.created_at).toLocaleDateString();
+        
+        // Handle Reason Text (Truncate if too long)
+        const fullReason = req.reason_for_request || req.justification || "No reason provided";
+        const shortReason = fullReason.length > 30 ? fullReason.substring(0, 30) + '...' : fullReason;
 
         const options = ['pending', 'approved', 'fulfilled', 'rejected'];
-
-        let selectHtml = `<select onchange="updateRequestStatus('${req.id}', this.value)" class="status-select" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc;">`;
+        let selectHtml = `<select onchange="initiateRequestStatusUpdate('${req.id}', this.value, '${req.status}')" class="status-select" ${req.status === 'fulfilled' ? 'disabled' : ''}>`;
         options.forEach(opt => {
-            const isSelected = req.status === opt ? 'selected' : '';
-            const label = opt.charAt(0).toUpperCase() + opt.slice(1);
-            selectHtml += `<option value="${opt}" ${isSelected}>${label}</option>`;
+            selectHtml += `<option value="${opt}" ${req.status === opt ? 'selected' : ''}>${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`;
         });
         selectHtml += `</select>`;
 
         tbody.innerHTML += `
             <tr>
                 <td>${date}</td>
-                <td>${req.school_name}</td>
+                <td>
+                    <strong>${req.school_name}</strong><br>
+                    <small style="color:#666;">${req.location}</small>
+                </td>
                 <td style="text-transform: capitalize;">${req.computer_type}</td>
                 <td>${req.quantity}</td>
-                <td><span class="status ${getStatusClass(req.status)}">${req.status}</span></td>
-                <td>
-                    ${selectHtml}
+                
+                <td title="${fullReason}" style="cursor:help; max-width: 200px;">
+                    ${shortReason} <i class="fas fa-info-circle" style="color:#aaa; font-size:0.8em;"></i>
                 </td>
+
+                <td><span class="status ${getStatusClass(req.status)}">${req.status}</span></td>
+                <td>${selectHtml}</td>
             </tr>
         `;
     });
 }
 
-async function updateRequestStatus(id, status) {
-    if (!confirm(`Are you sure you want to change status to ${status}?`)) {
-        loadAdminDashboardData();
-        return;
+async function initiateRequestStatusUpdate(id, newStatus, oldStatus) {
+    // Logic to capture comments for email
+    let comment = '';
+    
+    if (newStatus === 'rejected') {
+        comment = prompt("Please provide a reason for rejection (this will be emailed to the school):");
+        if (comment === null) {
+            loadAdminRequests(); // Revert
+            return;
+        }
+    } else if (newStatus === 'approved') {
+        const addNote = confirm("Do you want to add a custom note to the approval email?");
+        if (addNote) {
+            comment = prompt("Enter your note:");
+            if(comment === null) comment = '';
+        }
+    } else if (newStatus === 'fulfilled') {
+        alert("Please use the 'Fulfill' button in the Inventory tab to assign specific computers.");
+        loadAdminRequests(); // Revert
+        return; 
     }
 
     try {
         const response = await fetch(`${API_URL}/schools/requests/${id}/status`, {
             method: 'PATCH',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ status })
+            body: JSON.stringify({ status: newStatus, admin_comment: comment })
+        });
+        if (response.ok) {
+            showNotification(`Request ${newStatus} successfully!`, 'success');
+            loadAdminDashboardData();
+        } else {
+            showNotification('Update failed', 'error');
+            loadAdminRequests();
+        }
+    } catch (e) { console.error(e); }
+}
+
+/* =========================================
+   FULFILLMENT LOGIC
+   ========================================= */
+
+async function openFulfillmentModal(inventoryId) {
+    const modal = document.getElementById('fulfillmentModal');
+    const hiddenInput = document.getElementById('fulfillInventoryId');
+    const select = document.getElementById('schoolSelect');
+    
+    if (!modal || !hiddenInput || !select) return;
+
+    hiddenInput.value = inventoryId;
+    modal.style.display = 'block';
+
+    try {
+        const response = await fetch(`${API_URL}/schools/requests?status=approved`, { headers: getAuthHeaders() });
+        if (response.ok) {
+            const data = await response.json();
+            const requests = data.requests || [];
+            select.innerHTML = '<option value="">Select a school...</option>';
+            requests.forEach(req => {
+                select.innerHTML += `<option value="${req.id}">${req.school_name} - ${req.computer_type} (${req.quantity} needed)</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('Error loading requests', error);
+        select.innerHTML = '<option>Error loading schools</option>';
+    }
+}
+
+function closeFulfillmentModal() {
+    const modal = document.getElementById('fulfillmentModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleFulfillmentSubmit(e) {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const requestId = formData.get('requestId');
+    const inventoryId = formData.get('inventoryId');
+
+    // Currently the API expects array of inventory IDs
+    const payload = {
+        requestId: requestId,
+        inventoryItemIds: [inventoryId]
+    };
+
+    try {
+        const response = await fetch(`${API_URL}/schools/fulfill`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
         });
 
         if (response.ok) {
-            showNotification(`Request marked as ${status}`, 'success');
-            loadAdminDashboardData();
+            showNotification('Computer assigned successfully!', 'success');
+            closeFulfillmentModal();
+            loadInventory('ready');
+            loadBeneficiaries();
         } else {
-            showNotification('Failed to update status', 'error');
+            const err = await response.json();
+            showNotification(err.message || 'Assignment failed', 'error');
         }
     } catch (error) {
         console.error(error);
@@ -1141,15 +1085,117 @@ async function updateRequestStatus(id, status) {
     }
 }
 
+/* =========================================
+   HELPER FUNCTIONS
+   ========================================= */
+
+async function handleContactSubmit(e) {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const contactData = Object.fromEntries(formData.entries());
+    if (!validateForm(e.target)) return;
+
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    submitBtn.disabled = true;
+    try {
+        const response = await fetch(`${API_URL}/contact`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(contactData)
+        });
+        const result = await response.json();
+        if (response.ok) {
+            e.target.reset();
+            showNotification('Message sent!', 'success');
+        } else {
+            showNotification(result.message || 'Failed to send', 'error');
+        }
+    } catch (error) {
+        showNotification('Connection error.', 'error');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const existingNotifications = document.querySelectorAll('.notification');
+    existingNotifications.forEach(notification => notification.remove());
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `<div class="notification-content"><i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i><span>${message}</span><button class="notification-close" onclick="this.parentElement.parentElement.remove()"><i class="fas fa-times"></i></button></div>`;
+    notification.style.cssText = `position: fixed; top: 100px; right: 20px; background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'}; color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 3000; max-width: 400px; animation: slideInRight 0.3s ease;`;
+    document.body.appendChild(notification);
+    setTimeout(() => { if (notification.parentNode) notification.remove(); }, 5000);
+}
+
+function handleModalClick(e) {
+    if (e.target === document.getElementById('authModal')) closeAuthModal();
+    if (e.target === document.getElementById('dashboardModal')) closeDashboard();
+    if (e.target === document.getElementById('requestModal')) closeRequestModal();
+    if (e.target === document.getElementById('fulfillmentModal')) closeFulfillmentModal();
+}
+
+function animateOnScroll() {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('fade-in-up'); });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+    document.querySelectorAll('.value-card, .service-card, .stat-card, .story-card, .region-card').forEach(el => observer.observe(el));
+}
 
 function getStatusClass(status) {
     switch (status) {
-        case 'delivered': return 'delivered';
-        case 'approved': return 'delivered';
-        case 'fulfilled': return 'delivered';
-        case 'pending': return 'processing';
-        case 'processing': return 'processing';
-        case 'rejected': return 'error';
+        case 'delivered': case 'approved': case 'fulfilled': return 'delivered'; // Green
+        case 'pending': case 'processing': return 'processing'; // Orange/Blue
+        case 'rejected': return 'error'; // Red
+        case 'received': return 'processing';
+        case 'ready': return 'delivered';
         default: return '';
     }
 }
+
+// Add CSS for notification animation
+const style = document.createElement('style');
+style.textContent = `@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .notification-content { display: flex; align-items: center; gap: 12px; } .notification-close { background: none; border: none; color: inherit; cursor: pointer; padding: 4px; border-radius: 4px; transition: background-color 0.2s; } .notification-close:hover { background-color: rgba(255, 255, 255, 0.2); } .error { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important; } .hamburger.active span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); } .hamburger.active span:nth-child(2) { opacity: 0; } .hamburger.active span:nth-child(3) { transform: rotate(-45deg) translate(7px, -6px); }`;
+document.head.appendChild(style);
+
+// Placeholder for Donor User Dashboard (from previous code)
+async function loadUserDashboardData() {
+    if (!currentUser || !currentUser.user_id) return;
+    try {
+        const response = await fetch(`${API_URL}/donations/user/${currentUser.user_id}`, { headers: getAuthHeaders() });
+        if (response.ok) {
+            const data = await response.json();
+            const donations = data.donations || [];
+            updateDashboardStats(donations);
+            renderDonationsTable(donations);
+            renderRecentActivity(donations);
+        }
+    } catch (e) { console.error(e); }
+}
+
+function updateDashboardStats(donations) {
+    const totalDonationsEl = document.getElementById('dashTotalDonations');
+    if (totalDonationsEl) totalDonationsEl.textContent = donations.length;
+}
+
+function renderDonationsTable(donations) {
+    const tbody = document.getElementById('donationTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    donations.forEach(donation => {
+        const date = new Date(donation.created_at).toLocaleDateString();
+        tbody.innerHTML += `<tr><td>${date}</td><td>${donation.computer_type}</td><td>${donation.quantity}</td><td><span class="status ${getStatusClass(donation.status)}">${donation.status}</span></td></tr>`;
+    });
+}
+
+function renderRecentActivity(donations) {
+   // Simplified for brevity, can paste full version if needed
+   const activityList = document.getElementById('dashActivityList');
+   if(activityList) activityList.innerHTML = donations.length ? '' : 'No activity';
+   donations.slice(0,3).forEach(d => {
+       activityList.innerHTML += `<div class="activity-item"><div class="activity-content">${d.status}: ${d.quantity} ${d.computer_type}</div></div>`;
+   });
+} 

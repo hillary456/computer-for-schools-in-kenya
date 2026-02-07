@@ -7,7 +7,8 @@ import {
   updateRequestStatus,
   getUserSchoolRequests,
   getSchools,
-  getSchoolById
+  getSchoolById,
+  fulfillSchoolRequest
 } from '../controllers/school.controller.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 
@@ -17,7 +18,8 @@ const router = Router();
 router.post(
   '/requests',
   authenticateToken,
-  authorizeRoles('school'),
+  // Note: Ensure your user has role 'school' or remove this check for testing
+  authorizeRoles('school'), 
   [
     body('school_name').trim().notEmpty().withMessage('School name is required'),
     body('contact_person').trim().notEmpty().withMessage('Contact person is required'),
@@ -26,9 +28,22 @@ router.post(
     body('location').trim().notEmpty().withMessage('Location is required'),
     body('computer_type').isIn(['desktop', 'laptop', 'tablet', 'any']).withMessage('Invalid computer type'),
     body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-    body('justification').trim().notEmpty().withMessage('Justification is required'),
+    
+    // --- FIX: Changed 'justification' to 'reason_for_request' ---
+    body('reason_for_request').trim().notEmpty().withMessage('Reason for request is required'),
   ],
   createSchoolRequest
+);
+
+router.post(
+  '/fulfill',
+  authenticateToken,
+  authorizeRoles('admin'),
+  [
+    body('requestId').isInt().withMessage('Request ID is required'),
+    body('inventoryItemIds').isArray({ min: 1 }).withMessage('Must select at least one item')
+  ],
+  fulfillSchoolRequest
 );
 
 router.get('/requests', authenticateToken, authorizeRoles('admin'), getSchoolRequests);
@@ -52,4 +67,4 @@ router.get('/', getSchools);
 
 router.get('/:id', getSchoolById);
 
-export default router;
+export default router; 

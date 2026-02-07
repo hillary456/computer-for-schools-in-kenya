@@ -40,10 +40,12 @@ export const createDonation = async (req: Request, res: Response): Promise<void>
 
 export const getDonations = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { status, page = 1, limit = 10 } = req.query;
+    // 1. Support filtering by 'condition' (working, needs-repair, mixed, etc.)
+    const { status, condition, page = 1, limit = 10 } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
 
-    let query = supabase
+    // Use supabaseAdmin to bypass RLS and see all records
+    let query = supabaseAdmin
       .from('donations')
       .select('*, users(name, email, user_type)', { count: 'exact' })
       .order('created_at', { ascending: false })
@@ -51,6 +53,11 @@ export const getDonations = async (req: Request, res: Response): Promise<void> =
 
     if (status) {
       query = query.eq('status', status);
+    }
+
+    // NEW: Filter logic for the frontend dropdown
+    if (condition) {
+      query = query.eq('condition_status', condition);
     }
 
     const { data, error, count } = await query;
@@ -129,8 +136,6 @@ export const getUserDonations = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// backend/src/controllers/donation.controller.ts
-
 export const updateDonationStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
@@ -143,7 +148,7 @@ export const updateDonationStatus = async (req: Request, res: Response): Promise
     const { status } = req.body;
     const donationId = parseInt(id, 10);
 
-    // 1. Fetch the current donation details first
+    // 1. Fetch current donation details
     const { data: donation, error: fetchError } = await supabaseAdmin
       .from('donations')
       .select('*')
@@ -155,27 +160,41 @@ export const updateDonationStatus = async (req: Request, res: Response): Promise
       return;
     }
 
-    // 2. LOGIC: If status changes to 'processing', create inventory items automatically
-    // This loop creates one inventory row for every computer in the donation quantity
-    if (status === 'processing' && donation.status !== 'processing') {
+    // 2. AUTOMATION LOGIC: Create inventory items
+    // Trigger if status matches 'processing' OR 'collected'
+    const validInventoryStatuses = ['processing', 'collected'];
+
+    // Check if inventory already exists to prevent duplicates (Retry Logic)
+    const { count: inventoryCount } = await supabaseAdmin
+      .from('computer_inventory')
+      .select('*', { count: 'exact', head: true })
+      .eq('donation_id', donationId);
+
+    // If entering a valid status AND no inventory exists yet -> Create it
+    if (validInventoryStatuses.includes(status) && (inventoryCount === 0)) {
+      
       const inventoryItems = Array.from({ length: donation.quantity }).map(() => ({
         donation_id: donationId,
-        // Default mixed to desktop if unspecified, or keep as mixed
-        computer_type: donation.computer_type === 'mixed' ? 'desktop' : donation.computer_type, 
-        status: 'received', // Initial status in inventory
+        // FIX: If mixed, default to 'desktop'. Admin fixes this in Refurbish step.
+        computer_type: donation.computer_type === 'mixed' ? 'desktop' : donation.computer_type,
+        
+        // Initial status is always 'received' so it shows in the first tab
+        status: 'received', 
+        
+        // FIX: If mixed, default to 'needs-repair'. Admin checks actual condition.
         condition_received: donation.condition_status === 'mixed' ? 'needs-repair' : donation.condition_status,
+        
+        // Generate a temporary serial number
+        serial_number: `PENDING-${donationId}-${Math.floor(1000 + Math.random() * 9000)}`,
         created_at: new Date(),
         updated_at: new Date()
       }));
 
-      const { error: inventoryError } = await supabaseAdmin
+      const { error: invError } = await supabaseAdmin
         .from('computer_inventory')
         .insert(inventoryItems);
 
-      if (inventoryError) {
-        console.error('Inventory creation failed:', inventoryError);
-        // We continue to update status, or you could return error here
-      }
+      if (invError) console.error('Inventory Error:', invError);
     }
 
     // 3. Update the donation status
@@ -185,17 +204,10 @@ export const updateDonationStatus = async (req: Request, res: Response): Promise
       .eq('id', donationId)
       .select();
 
-    if (error) {
-      res.status(500).json({ message: error.message });
-      return;
-    }
+    if (error) throw error;
 
-    res.json({
-      message: `Donation status updated to ${status}. Inventory updated.`,
-      donation: data[0]
-    });
-  } catch (error) {
-    console.error('Update donation status error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.json({ message: 'Status updated and inventory generated', donation: data[0] });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Server error' });
   }
-};
+}; 
