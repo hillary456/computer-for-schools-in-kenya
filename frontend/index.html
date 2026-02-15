@@ -49,7 +49,7 @@
                 <div class="hero-text">
                     <h1>Bridging the <span class="highlight">Digital Divide</span> in Kenya</h1>
                     <p>Computer for Schools Kenya transforms donated computers into learning opportunities for Kenyan
-                        students. Help us bridge the digital divide while managing e-waste responsibly.</p>
+                        students. Help us bridge the digital divide by giving used technology a second life through professional refurbishment.</p>
                     <div class="hero-buttons">
                         <button class="btn btn-primary" onclick="scrollToSection('donate')">
                             <i class="fas fa-heart"></i>
@@ -79,7 +79,7 @@
                 <h2>About Computer for Schools Kenya</h2>
                 <p>We are a non-profit organization dedicated to transforming donated computers into powerful learning
                     tools for Kenyan schools. Since our inception, we've been committed to bridging the digital divide
-                    while promoting environmental sustainability through responsible e-waste management.</p>
+                    by extending the useful life of technology through expert refurbishment.</p>
             </div>
 
             <div class="values-grid">
@@ -88,8 +88,8 @@
                         <i class="fas fa-bullseye"></i>
                     </div>
                     <h3>Our Mission</h3>
-                    <p>To bridge the digital divide in Kenya by providing refurbished computers to schools and managing
-                        e-waste responsibly.</p>
+                    <p>To bridge the digital divide in Kenya by providing high-quality refurbished computers to schools
+                        and enhancing digital literacy.</p>
                 </div>
 
                 <div class="value-card">
@@ -103,10 +103,10 @@
 
                 <div class="value-card">
                     <div class="value-icon">
-                        <i class="fas fa-globe"></i>
+                        <i class="fas fa-leaf"></i>
                     </div>
-                    <h3>Environmental Care</h3>
-                    <p>Reducing electronic waste through refurbishment and proper recycling of unusable components.</p>
+                    <h3>Sustainability</h3>
+                    <p>Promoting environmental care by extending the lifespan of electronic devices through repair and upgrades.</p>
                 </div>
 
                 <div class="value-card">
@@ -178,15 +178,6 @@
                     <p>Refurbished computers are distributed to schools across Kenya, prioritizing underserved areas.
                     </p>
                 </div>
-
-                <div class="service-card">
-                    <div class="service-icon">
-                        <i class="fas fa-recycle"></i>
-                    </div>
-                    <h3>E-Waste Management</h3>
-                    <p>Components that cannot be refurbished are recycled responsibly to minimize environmental impact.
-                    </p>
-                </div>
             </div>
         </div>
     </section>
@@ -236,7 +227,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="email">Email Address *</label>
-                            <input type="email" id="req_email" name="email" required>
+                            <input type="email" id="email" name="email" required>
                         </div>
                         <div class="form-group">
                             <label for="phone">Phone Number *</label>
@@ -643,7 +634,6 @@
                         <li>Refurbishment Services</li>
                         <li>School Distribution</li>
                         <li>Digital Literacy Training</li>
-                        <li>E-Waste Management</li>
                     </ul>
                 </div>
 
@@ -833,6 +823,9 @@
                             </button>
                             <button class="nav-item" onclick="showDashboardSection('adminBeneficiaries')">
                                 <i class="fas fa-users"></i> Beneficiaries
+                            </button>
+                            <button class="nav-item" onclick="showDashboardSection('adminReports')">
+                                <i class="fas fa-chart-pie"></i> Reports & Analytics
                             </button>
                         </div>
 
@@ -1121,6 +1114,26 @@
                             </div>
                         </div>
 
+                        <div id="adminReportsSection" class="dashboard-section">
+                            <div class="section-header-actions" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                                <h3>Detailed Reports</h3>
+                                
+                                <div class="report-filters" style="display: flex; gap: 10px; align-items: center;">
+                                    <label>From:</label>
+                                    <input type="date" id="reportStartDate" class="form-input" style="padding: 5px;">
+                                    <label>To:</label>
+                                    <input type="date" id="reportEndDate" class="form-input" style="padding: 5px;">
+                                    <button class="btn btn-sm btn-primary" onclick="loadAdvancedReports()">
+                                        <i class="fas fa-filter"></i> Apply Filter
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="adminReportsContent">
+                                <p>Loading reports...</p>
+                            </div>
+                        </div>
+
                     </div>
 
                     <div id="settingsSection" class="dashboard-section">
@@ -1242,4 +1255,4 @@
     <script src="js/main.js"></script>
 </body>
 
-</html>
+</html> 

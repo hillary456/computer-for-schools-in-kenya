@@ -1,6 +1,15 @@
 import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import { supabase, supabaseAdmin } from '../config/supabase.js';
+import nodemailer from 'nodemailer';
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail', 
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
 
 export const createDonation = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -145,7 +154,7 @@ export const updateDonationStatus = async (req: Request, res: Response): Promise
     }
 
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, collection_date } = req.body; // NEW: Capture collection_date
     const donationId = parseInt(id, 10);
 
     // 1. Fetch current donation details
@@ -160,54 +169,84 @@ export const updateDonationStatus = async (req: Request, res: Response): Promise
       return;
     }
 
-    // 2. AUTOMATION LOGIC: Create inventory items
-    // Trigger if status matches 'processing' OR 'collected'
+    // 2. AUTOMATION LOGIC: Create inventory items (Existing Logic)
     const validInventoryStatuses = ['processing', 'collected'];
-
-    // Check if inventory already exists to prevent duplicates (Retry Logic)
     const { count: inventoryCount } = await supabaseAdmin
       .from('computer_inventory')
       .select('*', { count: 'exact', head: true })
       .eq('donation_id', donationId);
 
-    // If entering a valid status AND no inventory exists yet -> Create it
     if (validInventoryStatuses.includes(status) && (inventoryCount === 0)) {
-      
       const inventoryItems = Array.from({ length: donation.quantity }).map(() => ({
         donation_id: donationId,
-        // FIX: If mixed, default to 'desktop'. Admin fixes this in Refurbish step.
         computer_type: donation.computer_type === 'mixed' ? 'desktop' : donation.computer_type,
-        
-        // Initial status is always 'received' so it shows in the first tab
         status: 'received', 
-        
-        // FIX: If mixed, default to 'needs-repair'. Admin checks actual condition.
         condition_received: donation.condition_status === 'mixed' ? 'needs-repair' : donation.condition_status,
-        
-        // Generate a temporary serial number
         serial_number: `PENDING-${donationId}-${Math.floor(1000 + Math.random() * 9000)}`,
         created_at: new Date(),
         updated_at: new Date()
       }));
 
-      const { error: invError } = await supabaseAdmin
-        .from('computer_inventory')
-        .insert(inventoryItems);
-
-      if (invError) console.error('Inventory Error:', invError);
+      await supabaseAdmin.from('computer_inventory').insert(inventoryItems);
     }
 
-    // 3. Update the donation status
+    // 3. Prepare Update Data
+    const updateData: any = { status };
+    
+    // If Admin provided a confirmed collection date, update the pickup_date
+    if (collection_date) {
+        updateData.pickup_date = collection_date;
+    }
+
+    // 4. Update Database
     const { data, error } = await supabaseAdmin
       .from('donations')
-      .update({ status })
+      .update(updateData)
       .eq('id', donationId)
       .select();
 
     if (error) throw error;
 
-    res.json({ message: 'Status updated and inventory generated', donation: data[0] });
+    // 5. SEND APPRECIATION EMAIL (If Approved)
+    if (status === 'approved') {
+        const pickupDateObj = new Date(collection_date || donation.pickup_date);
+        const formattedDate = pickupDateObj.toDateString();
+
+        const emailSubject = '🎉 Donation Approved - Computer for Schools Kenya';
+        const emailBody = `
+            Dear ${donation.donor_name},
+
+            We are thrilled to accept your generous donation of ${donation.quantity} ${donation.computer_type}(s)! 
+            
+            Your contribution plays a vital role in bridging the digital divide for students in Kenya.
+
+            **Collection Details:**
+            Our team has scheduled to collect the equipment on: **${formattedDate}**
+            at: ${donation.address}
+
+            Please ensure the equipment is ready by then. If you need to reschedule, please reply to this email.
+
+            Thank you for making a difference!
+
+            Warm regards,
+            The CFS Kenya Team
+        `;
+
+        try {
+            await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: donation.email,
+                subject: emailSubject,
+                text: emailBody
+            });
+            console.log(`Appreciation email sent to ${donation.email}`);
+        } catch (emailErr) {
+            console.error('Failed to send email:', emailErr);
+        }
+    }
+
+    res.json({ message: 'Status updated and email sent', donation: data[0] });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Server error' });
   }
-}; 
+};

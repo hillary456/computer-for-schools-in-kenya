@@ -759,6 +759,7 @@ async function loadAdminDashboardData() {
     loadAdminRequests();
     loadInventory();
     loadBeneficiaries();
+    loadAdvancedReports();
 }
 
 async function loadBeneficiaries() {
@@ -897,24 +898,60 @@ function renderAdminDonationsTable(donations) {
     });
 }
 
+// frontend/js/main.js
+
 async function updateDonationStatus(id, status) {
-    if (!confirm(`Change status to ${status}?`)) {
-        loadAdminDashboardData(); // Revert UI
-        return;
+    let collectionDate = null;
+
+    // 1. If Approving, ask for the Collection Date
+    if (status === 'approved') {
+        // Create a simple date prompt (In a real app, use a modal with a date picker)
+        const defaultDate = new Date().toISOString().split('T')[0]; // Today
+        collectionDate = prompt("Please confirm the Collection/Pickup Date (YYYY-MM-DD):", defaultDate);
+        
+        if (collectionDate === null) {
+            loadAdminDashboardData(); // User clicked cancel
+            return; 
+        }
+        
+        // Basic validation
+        if (!collectionDate) {
+            alert("Collection date is required for approval.");
+            return;
+        }
+    } 
+    // 2. Standard confirmation for other statuses
+    else {
+        if (!confirm(`Are you sure you want to change status to ${status}?`)) {
+            loadAdminDashboardData();
+            return;
+        }
     }
+
     try {
         const response = await fetch(`${API_URL}/donations/${id}/status`, {
             method: 'PATCH',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ status })
+            body: JSON.stringify({ 
+                status: status,
+                collection_date: collectionDate // Send the date to backend
+            })
         });
+
         if (response.ok) {
-            showNotification(`Donation updated to ${status}`, 'success');
+            if (status === 'approved') {
+                showNotification(`Donation approved! Appreciation email sent with collection date: ${collectionDate}`, 'success');
+            } else {
+                showNotification(`Donation marked as ${status}`, 'success');
+            }
             loadAdminDashboardData();
         } else {
-            showNotification('Update failed', 'error');
+            showNotification('Failed to update status', 'error');
         }
-    } catch (error) { console.error(error); }
+    } catch (error) {
+        console.error(error);
+        showNotification('Connection error', 'error');
+    }
 }
 
 async function loadAdminRequests() {
@@ -1174,6 +1211,160 @@ async function loadUserDashboardData() {
             renderRecentActivity(donations);
         }
     } catch (e) { console.error(e); }
+}
+
+
+// frontend/js/main.js
+
+async function loadAdvancedReports() {
+    // Get filter values from HTML inputs (we will add these inputs next)
+    const startDate = document.getElementById('reportStartDate')?.value;
+    const endDate = document.getElementById('reportEndDate')?.value;
+    
+    let queryParams = '';
+    if (startDate && endDate) {
+        queryParams = `?start_date=${startDate}&end_date=${endDate}`;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/stats/reports${queryParams}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            renderReportsView(data);
+        } else {
+            console.error('Failed to load reports');
+        }
+    } catch (error) {
+        console.error('Error loading reports:', error);
+    }
+}
+
+// frontend/js/main.js
+
+function renderReportsView(data) {
+    const container = document.getElementById('adminReportsContent');
+    if (!container) return;
+
+    // 1. Summary Cards (Kept the same)
+    let html = `
+        <div class="dashboard-stats" style="margin-bottom: 30px;">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #e0e7ff; color: #3730a3;"><i class="fas fa-hand-holding-heart"></i></div>
+                <div class="stat-info">
+                    <div class="stat-number">${data.summary.total_donors}</div>
+                    <div class="stat-label">Total Donors</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #fce7f3; color: #be185d;"><i class="fas fa-school"></i></div>
+                <div class="stat-info">
+                    <div class="stat-number">${data.summary.total_schools}</div>
+                    <div class="stat-label">Registered Schools</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // --- SECTION 2A: APPROVED DONATIONS TABLE ---
+    html += `<h3>Approved Donations (Incoming)</h3>
+             <div class="donations-table" style="margin-bottom: 30px;">
+             <table>
+                <thead>
+                    <tr>
+                        <th>Date Approved</th>
+                        <th>Donor Name</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+    
+    const donations = data.approvals.donations || [];
+    
+    if (donations.length === 0) {
+        html += `<tr><td colspan="4" style="text-align:center">No approved donations in this period</td></tr>`;
+    } else {
+        donations.forEach(d => {
+            html += `
+                <tr>
+                    <td>${new Date(d.updated_at).toLocaleDateString()}</td>
+                    <td>${d.donor_name}</td>
+                    <td style="text-transform: capitalize;">${d.computer_type}</td>
+                    <td>${d.quantity}</td>
+                </tr>`;
+        });
+    }
+    html += `</tbody></table></div>`;
+
+    // --- SECTION 2B: APPROVED REQUESTS TABLE ---
+    html += `<h3>Approved School Requests (Outgoing)</h3>
+             <div class="donations-table" style="margin-bottom: 30px;">
+             <table>
+                <thead>
+                    <tr>
+                        <th>Date Approved</th>
+                        <th>School Name</th>
+                        <th>Location</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+    const requests = data.approvals.requests || [];
+
+    if (requests.length === 0) {
+        html += `<tr><td colspan="5" style="text-align:center">No approved requests in this period</td></tr>`;
+    } else {
+        requests.forEach(r => {
+            html += `
+                <tr>
+                    <td>${new Date(r.updated_at).toLocaleDateString()}</td>
+                    <td>${r.school_name}</td>
+                    <td style="text-transform: capitalize;">${r.location}</td>
+                    <td style="text-transform: capitalize;">${r.computer_type}</td>
+                    <td>${r.quantity}</td>
+                </tr>`;
+        });
+    }
+    html += `</tbody></table></div>`;
+
+    // 3. Distribution by Location & Month (Kept the same)
+    html += `<h3>Distribution Report (Location & Month)</h3>
+             <div class="donations-table">
+             <table>
+                <thead>
+                    <tr>
+                        <th>Location</th>
+                        <th>Month Given Out</th>
+                        <th>Total Computers</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+    const locations = Object.keys(data.distribution_by_location_month);
+    
+    if (locations.length === 0) {
+        html += `<tr><td colspan="3" style="text-align:center">No distribution data found</td></tr>`;
+    } else {
+        locations.forEach(location => {
+            const months = data.distribution_by_location_month[location];
+            Object.entries(months).forEach(([month, count]) => {
+                html += `
+                    <tr>
+                        <td style="font-weight:bold; text-transform:capitalize;">${location}</td>
+                        <td>${month}</td>
+                        <td>${count}</td>
+                    </tr>`;
+            });
+        });
+    }
+    html += `</tbody></table></div>`;
+
+    container.innerHTML = html;
 }
 
 function updateDashboardStats(donations) {
